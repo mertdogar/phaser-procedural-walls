@@ -15,7 +15,7 @@ You need Node 20 or newer and pnpm. Any editor works.
 ```bash
 mkdir walls-quickstart && cd walls-quickstart
 pnpm init
-pnpm add phaser phaser-procedural-walls
+pnpm add phaser @mertdogar/phaser-procedural-walls
 pnpm add -D vite typescript
 ```
 
@@ -36,7 +36,7 @@ Create `main.ts` with a game config that loads the scene plugin and Arcade Physi
 
 ```ts
 import Phaser from "phaser";
-import { WallMapPlugin } from "phaser-procedural-walls";
+import { WallMapPlugin } from "@mertdogar/phaser-procedural-walls";
 
 class Room extends Phaser.Scene {
   create() {}
@@ -86,7 +86,7 @@ create() {
 Add the field declaration at the top of the class:
 
 ```ts
-wallMap!: import("phaser-procedural-walls").WallMap;
+wallMap!: import("@mertdogar/phaser-procedural-walls").WallMap;
 ```
 
 Save. You now see a brick room. Notice that the corners are filled even though each wall was only given its centerline endpoints: the plugin extends walls that meet.

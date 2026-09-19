@@ -1,4 +1,4 @@
-# phaser-procedural-walls
+# @mertdogar/phaser-procedural-walls
 
 A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of data. You describe wall centerlines and window positions; the plugin draws thick wall bodies, a front face, see-through windows with sills, and optional Arcade Physics colliders, and it depth-sorts each wall so characters walk in front of and behind walls correctly.
 
@@ -16,14 +16,14 @@ A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of 
 ## Install
 
 ```bash
-pnpm add phaser-procedural-walls phaser
+pnpm add @mertdogar/phaser-procedural-walls phaser
 ```
 
 Register the scene plugin in your game config:
 
 ```ts
 import Phaser from "phaser";
-import { WallMapPlugin } from "phaser-procedural-walls";
+import { WallMapPlugin } from "@mertdogar/phaser-procedural-walls";
 
 new Phaser.Game({
   physics: { default: "arcade" },
