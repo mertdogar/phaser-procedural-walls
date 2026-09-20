@@ -6,9 +6,9 @@ export default defineConfig({
     outDir: "../dist",
     emptyOutDir: true,
     lib: {
-      entry: "../src/index.ts",
+      entry: { index: "../src/index.ts", geometry: "../src/geometry.ts" },
       formats: ["es"],
-      fileName: "index",
+      fileName: (_format, name) => `${name}.js`,
     },
     rollupOptions: { external: ["phaser"] },
   },
