@@ -3,13 +3,16 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { fileURLToPath, URL } from "node:url";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   root: "demo",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { "@": fileURLToPath(new URL("./demo", import.meta.url)) },
   },
-  build: {
+  build: mode === "editor" ? {
+    outDir: "../dist/editor",
+    emptyOutDir: true,
+  } : {
     outDir: "../dist",
     emptyOutDir: true,
     lib: {
@@ -20,4 +23,4 @@ export default defineConfig({
     rollupOptions: { external: ["phaser"] },
   },
   test: { root: ".", include: ["tests/**/*.test.ts"] },
-});
+}));

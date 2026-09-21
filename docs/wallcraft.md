@@ -4,14 +4,37 @@ Wallcraft is the repository's React, Vite, shadcn, and Phaser editor prototype. 
 
 ## Start the editor
 
-With Node 20 or newer and pnpm installed, run these commands from the repository root:
+With Node 20 or newer, run:
+
+```bash
+npx @mertdogar/phaser-procedural-walls@latest editor
+# or
+pnpx @mertdogar/phaser-procedural-walls@latest editor
+```
+
+The package version must include the editor CLI. It serves a prebuilt app; no repository checkout or Vite development server is needed. Open the printed `http://127.0.0.1:PORT/` URL. The server listens only on your computer and chooses an available port by default.
+
+To choose a port or see help:
+
+```bash
+npx @mertdogar/phaser-procedural-walls@latest editor --port 8080
+npx @mertdogar/phaser-procedural-walls@latest --help
+```
+
+If a chosen port is occupied, choose another or omit `--port`. Press Ctrl+C to stop. The launcher serves only the bundled app, not files from your working directory. Maps stay in browser memory; use Export JSON to keep them.
+
+### Run from source
+
+For development, run these commands from the repository root:
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-Open the local URL Vite prints. The editor starts with a sample floor plan. Changes live in memory: export before closing or reloading. `pnpm build` builds the plugin library, not a standalone editor site.
+Open the local URL Vite prints. The editor starts with a sample floor plan. Changes live in memory: export before closing or reloading.
+
+`pnpm build` builds the plugin library into `dist/` and the standalone editor into `dist/editor/`. Run `pnpm editor` to serve that build, or `pnpm editor --port 8080` to choose a port. Run `pnpm test:cli` after building to test the launcher. Rebuild after editing source files when using the packaged launcher.
 
 ## Draw and edit walls
 

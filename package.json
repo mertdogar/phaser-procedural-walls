@@ -27,6 +27,9 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "phaser-procedural-walls": "./bin/cli.mjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -41,6 +44,7 @@
   "sideEffects": false,
   "files": [
     "dist",
+    "bin",
     "LICENSE"
   ],
   "engines": {
@@ -51,11 +55,13 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build && tsc -p tsconfig.lib.json",
+    "build": "vite build && tsc -p tsconfig.lib.json && vite build --mode editor",
+    "editor": "node bin/cli.mjs editor",
+    "test:cli": "node --test tests/cli.test.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint src demo tests",
-    "prepublishOnly": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+    "lint": "oxlint src demo tests bin",
+    "prepublishOnly": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm test:cli"
   },
   "peerDependencies": {
     "phaser": "^4.0.0"

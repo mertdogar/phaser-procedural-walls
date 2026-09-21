@@ -17,16 +17,24 @@ A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of 
 
 ## Try Wallcraft
 
-From a checkout of this repository:
+With Node 20 or newer, launch the packaged editor:
+
+```bash
+npx @mertdogar/phaser-procedural-walls@latest editor
+# or
+pnpx @mertdogar/phaser-procedural-walls@latest editor
+```
+
+This command requires a release that includes the editor CLI. For a source checkout, use:
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-Open the URL Vite prints. Draw a wall, switch to Select to edit it, or open **Presets** to change shared styles. **Preview** adds a character controlled with the arrow keys.
+Open the localhost URL printed in the terminal. The packaged editor selects an available port; append `--port 8080` to choose one. Draw a wall, switch to Select to edit it, or open **Presets** to change shared styles. **Preview** adds a character controlled with the arrow keys. Press Ctrl+C in the terminal to stop the server.
 
-Wallcraft is an in-memory prototype in `demo/`, not part of the published library. Export your JSON before closing or reloading the page. See the [Wallcraft guide](docs/wallcraft.md) for editing, textures, and loading an exported map in a game.
+Wallcraft is an in-memory prototype, bundled alongside the Phaser library. Export your JSON before closing or reloading the page. See the [Wallcraft guide](docs/wallcraft.md) for editing, textures, and loading an exported map in a game.
 
 ## Install
 
@@ -90,7 +98,9 @@ pnpm dev     # wall editor prototype: draw walls and import/export WallMapConfig
 pnpm test    # geometry unit tests
 pnpm typecheck
 pnpm lint
-pnpm build   # library build to dist/
+pnpm build   # library in dist/ and bundled app in dist/editor/
+pnpm editor  # serve the built app locally
+pnpm test:cli # launcher integration tests (run after build)
 ```
 
 ## License
