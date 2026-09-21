@@ -1,8 +1,9 @@
 # API and geometry
 
-This reference describes the package's version 0.2.0 consumer API. Distances
-are world pixels. Colors are numbers, such as `0xb59a8c` in TypeScript or
-`11901580` in JSON.
+This reference tracks the repository's consumer API, including geometry changes
+after the original 0.2.0 release. Check the installed package before relying on
+the current collision or sill defaults. Distances are world pixels. Colors are
+numbers, such as `0xb59a8c` in TypeScript or `11901580` in JSON.
 
 ## Imports
 

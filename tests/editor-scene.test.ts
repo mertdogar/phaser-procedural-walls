@@ -6,6 +6,7 @@ vi.mock("phaser", () => {
   class Vector2 {
     constructor(public x: number, public y: number) {}
     clone() { return new Vector2(this.x, this.y); }
+    lengthSq() { return this.x * this.x + this.y * this.y; }
   }
   return { default: {
     Scene: class { sys = { isActive: () => false }; cameras = { main: { zoom: 1 } }; },
@@ -21,10 +22,29 @@ vi.mock("../src/WallMap", () => ({ WallMap: class { destroy() {} } }));
 
 import { EditorScene } from "../demo/editor/EditorScene";
 import { getMapBounds } from "../demo/editor-data";
+import { resolveWalls } from "../src/geometry";
 
 const pointer = (x: number, y: number) => ({ worldX: x, worldY: y, updateWorldPoint: vi.fn(), middleButtonDown: () => false }) as unknown as Phaser.Input.Pointer;
 
 describe("editor world coordinates", () => {
+  it.each([
+    [680, 618.9588499999999, false], [735, 618.9588499999999, true],
+    [680, 5000, false], [735, 5000, true],
+    [680, -300, false], [735, -300, true],
+  ])("sorts preview feet at %s against wall depth %s", (feet, depth, inFront) => {
+    const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [
+      { x1: 100, y1: 620, x2: 500, y2: 620, thickness: 20, height: 100, preset: "p", depth },
+    ] };
+    const scene = new EditorScene(config, vi.fn());
+    const player = { x: 300, y: feet, height: 64, width: 32, setVelocity: vi.fn().mockReturnThis(), setDepth: vi.fn() };
+    Object.assign(scene, { preview: true, player, previewWalls: resolveWalls(config.walls, config.presets), cursors: {
+      left: { isDown: false }, right: { isDown: false }, up: { isDown: false }, down: { isDown: false },
+    } });
+    scene.update();
+    const actualDepth = player.setDepth.mock.calls[0][0];
+    if (inFront) expect(actualDepth).toBeGreaterThan(depth);
+    else expect(actualDepth).toBeLessThan(depth);
+  });
   it.each([[1600, 1280, 2112, 1280], [-320, -160, -64, -160]])(
     "draws beyond the original viewport from (%s, %s) to (%s, %s)",
     (x1, y1, x2, y2) => {

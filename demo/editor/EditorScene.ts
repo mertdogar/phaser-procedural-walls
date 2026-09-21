@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { resolveWalls } from "../../src/geometry";
 import { WallMap } from "../../src/WallMap";
-import type { WallSpec, WindowSpec } from "../../src/types";
+import type { ResolvedWall, WallSpec, WindowSpec } from "../../src/types";
 import { getMapBounds, GRID_SIZE, type WallMapConfig } from "../editor-data";
 
 export type EditorTool = "select" | "wall";
@@ -27,6 +27,7 @@ interface WindowDrag {
 export class EditorScene extends Phaser.Scene {
   private configData: WallMapConfig;
   private wallMap: WallMap | null = null;
+  private previewWalls: ResolvedWall[] = [];
   private textureSources = new Map<string, string>();
   private overlay!: Phaser.GameObjects.Graphics;
   private grid!: Phaser.GameObjects.Graphics;
@@ -116,6 +117,7 @@ export class EditorScene extends Phaser.Scene {
         this.textureSources.set(item.key, item.source);
       }
       this.wallMap = new WallMap(this, this.preview ? { ...config, collide: true } : config);
+      this.previewWalls = this.preview ? resolveWalls(config.walls, config.presets) : [];
       this.syncPlayer();
       this.drawOverlay();
       this.onTextureError("");
@@ -130,12 +132,32 @@ export class EditorScene extends Phaser.Scene {
     const y = Number(this.cursors.down.isDown) - Number(this.cursors.up.isDown);
     const velocity = new Phaser.Math.Vector2(x, y);
     if (velocity.lengthSq() > 0) velocity.normalize().scale(150);
-    this.player.setVelocity(velocity.x, velocity.y).setDepth(this.player.y);
+    this.player.setVelocity(velocity.x, velocity.y).setDepth(this.getPlayerDepth());
     if (x !== 0) this.player.setFlipX(x < 0);
     if (x !== 0 || y !== 0) {
       this.cameras.main.centerOn(this.player.x, this.player.y);
       this.drawGrid();
     }
+  }
+
+  private getPlayerDepth(): number {
+    const player = this.player!;
+    let behind = Infinity;
+    let inFront = -Infinity;
+    for (const wall of this.previewWalls) {
+      const bottom = wall.collider.y + wall.collider.h;
+      if (player.x + player.width / 2 <= wall.body.x
+        || player.x - player.width / 2 >= wall.body.x + wall.body.w
+        || player.y <= wall.body.y
+        || player.y - player.height >= bottom) continue;
+      if (player.y < bottom) behind = Math.min(behind, wall.depth);
+      else inFront = Math.max(inFront, wall.depth);
+    }
+    if (inFront < behind && Number.isFinite(inFront) && Number.isFinite(behind)) {
+      return (inFront + behind) / 2;
+    }
+    if (Number.isFinite(behind)) return behind - 0.000001;
+    return Math.max(player.y, inFront + 0.000001);
   }
 
   fitMap(): void {

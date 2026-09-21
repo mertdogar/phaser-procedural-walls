@@ -2,6 +2,9 @@
 
 Wallcraft is the repository's React, Vite, shadcn, and Phaser editor prototype. Use it to build an axis-aligned wall map and try it with a character before exporting it to your game.
 
+This guide describes the current repository. A published npm release may lag
+behind these controls and collision changes; run from source to use this version.
+
 ## Start the editor
 
 With Node 20 or newer, run:
@@ -38,12 +41,16 @@ Open the local URL Vite prints. The editor starts with a sample floor plan. Chan
 
 ## Draw and edit walls
 
-Use **Fit map** to see the full floor plan. Scroll over the canvas or use the
-**−** and **+** buttons to zoom. Choose the hand tool and drag to pan; a
-middle-button drag also pans. Drawing and endpoint edits snap to 32 px without
-being limited to the initial viewport. The grid shows fewer lines when zoomed
-out, but snapping stays at 32 px. Preview bounds follow the map, and the camera
-follows the player while moving.
+Use **Fit map** to see the full floor plan. Two-finger trackpad scrolling pans
+in either direction; pinching zooms around the cursor. With a mouse, scroll to
+pan, use Ctrl+wheel or the **−** and **+** buttons to zoom, or drag with the
+middle button to pan. No separate pan tool is needed.
+
+The canvas fills the available pane. Axes cross at world coordinate `(0, 0)`;
+they move with the map, not the screen. Drawing and endpoint edits snap to 32 px
+without being limited to the initial viewport. The grid shows fewer lines when
+zoomed out, but snapping stays at 32 px. Preview bounds follow the map, and the
+camera follows the player while moving.
 
 1. Choose the wall tool on the left and drag on the map. Drawing snaps to a 32 px grid and locks to a horizontal or vertical line.
 2. Choose the pointer tool and click a wall. Its endpoints and inspector appear.
@@ -52,17 +59,61 @@ follows the player while moving.
 5. Set **Thickness** for body width and **Height** for the visible face. An edited height overrides the preset for that wall.
 6. Use **Drawing order** to resolve overlapping segments. Higher values render later. Clear it for automatic sorting.
 
-![Selected wall, endpoint handles, and inspector](images/wallcraft-editor.png)
+![Selected wall with endpoint handles, layers above the docked inspector, and origin axes](images/wallcraft-editor.png)
+
+The editor and preview screenshots use the sample map with all wall heights set
+to 80 px through **Map preferences**.
 
 New walls use `interior` when that preset exists, otherwise the first available preset. Choose a different preset in the selected wall's inspector. **Delete** removes the selected wall; **Reset** restores the entire sample map, including its presets.
 
-Undo/redo covers adding or deleting walls, reset, imports, and saved preset changes. Direct inspector edits and dragging are not currently recorded in that history. Export checkpoints before extensive editing.
+Undo/redo covers adding, duplicating, deleting, and reordering walls, bulk
+dimension updates, reset, imports, and saved preset changes. Direct inspector
+edits and dragging are not currently recorded in that history. Export checkpoints
+before extensive editing.
+
+## Manage wall layers
+
+The right sidebar shows **Layers** above **Wall inspector**. Drag the vertical
+divider to resize the sidebar or the horizontal divider to adjust the two
+sections. Each section scrolls independently. Focus a divider and use the arrow
+keys for keyboard resizing.
+
+1. Click a layer to select its wall on the canvas and load its inspector.
+2. Use **Duplicate wall** to copy it, including its windows. The copy is selected
+   and offset by 32 px on both axes.
+3. Use **Bring wall forward** or **Send wall backward** to move it one position.
+   The list runs from front to back. Reordering writes explicit drawing depths
+   to the walls, so the rendered order survives JSON export; it does not change
+   their coordinates or collision footprints.
+4. Use **Delete wall** to remove the selected segment. Use **Undo** to restore it.
+
+Clear a wall's **Drawing order** in the inspector to restore automatic depth for
+that wall. Check manual ordering in Preview because it also affects overlap with
+the player. Reordering uses the arrow buttons, not drag-and-drop.
+
+## Change dimensions for the whole map
+
+Open **Map preferences** in the top bar to edit existing walls in bulk.
+
+1. Enter **Wall height (px)** or **Wall thickness (px)**.
+2. Click **Apply to all** beside that field. Height and thickness are separate
+   actions; entering both values does not apply both at once.
+3. Close the dialog to inspect the result, or use **Undo** to revert an action.
+
+Height must be zero or greater; zero removes the visible face. Thickness must
+be greater than zero. Bulk height replaces each existing wall's height override.
+Neither action changes presets or the defaults for future walls.
 
 ## Position windows
 
 Select a wall and click **Add** in its Windows section. Drag a window along the selected wall, or enter its offset in the inspector. Dragging snaps to the grid; the offset measures from the wall's first authored endpoint to the near edge of the opening.
 
-Window width is currently edited through JSON. Windows are visual openings and do not create walkable gaps. For a doorway, leave space between two wall segments.
+Set **Width (px)** beside **Offset (px)** for each window in the inspector.
+Changes appear immediately. Width is at least 1 pixel and can't extend past
+the wall's end from the current offset.
+
+Windows are visual openings and do not create walkable gaps. For a doorway,
+leave space between two wall segments.
 
 ## Manage shared presets
 
@@ -75,6 +126,11 @@ Open **Presets** in the top bar, then select a style.
 - Delete is available only when no walls use the preset and at least one other preset remains.
 
 Edits apply on save. Switching presets or closing the manager discards unsaved form edits. Individual wall height overrides remain in effect after changing a preset's face height. To inherit the preset again, remove that wall's `height` field in JSON and reimport.
+
+Leave **Sill height** blank to match each wall's thickness. An explicit value
+overrides that behavior, and zero disables sills. The sill is clipped to the
+opening height, so it can cover a short opening completely. Older maps with an
+explicit `sillHeight` retain that value until you clear it and save the preset.
 
 ![Preset manager with uploaded texture previews](images/wallcraft-presets.png)
 
@@ -96,6 +152,11 @@ Click **Preview** next to Export JSON. The editing tools hide and a character ap
 ![Playable preview with a character inside the map](images/wallcraft-preview.png)
 
 Preview enables collision even if the imported map has `collide: false`; it does not change that exported setting. Check wall junctions, doorway gaps, window visibility, and any manual drawing-order values.
+
+Collisions use the wall body's bottom footprint, shifted south by its effective
+face height, rather than the full raised face. Use matching face heights for
+segments around an aligned doorway. See [collision geometry](how-it-works.md#collision)
+for the exact model. Preview hides the layers and inspector to use the full canvas.
 
 ## Save and load maps
 

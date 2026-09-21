@@ -2,6 +2,7 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   CopyIcon,
+  CircleHelpIcon,
   BrickWallIcon,
   DownloadIcon,
   FileUpIcon,
@@ -112,6 +113,7 @@ export default function App() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (presetsOpen || importOpen) return;
       const target = event.target as HTMLElement;
+      if (target.closest('[role="dialog"]')) return;
       if (target.matches("input, textarea, select, [contenteditable='true']")) return;
       if ((event.key === "Backspace" || event.key === "Delete") && selectedIndex !== null) {
         event.preventDefault();
@@ -260,12 +262,6 @@ function Editor(props: EditorProps) {
           <ResizablePanel id="map" defaultSize="72%" minSize="30%">
             <div className="relative size-full overflow-hidden bg-muted shadow-inner">
               <WallCanvas {...canvasProps(props)} />
-              {!props.preview && <div className="absolute top-4 left-4">
-                <ToolPicker tool={props.tool} onChange={props.onToolChange} vertical />
-              </div>}
-              <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 rounded-full border bg-background px-3 py-2 text-center text-xs text-muted-foreground shadow-sm">
-                {props.preview ? "Arrow keys to move · wall collisions enabled" : "Two-finger scroll to pan · pinch to zoom"}
-              </div>
             </div>
           </ResizablePanel>
           {!props.preview && <>
@@ -350,6 +346,7 @@ function TopBar(props: EditorProps) {
           <h1 className="font-semibold leading-tight">Wallcraft</h1>
           <p className="text-xs text-muted-foreground">Untitled floor plan</p>
         </div>
+        {!props.preview && <ToolPicker tool={props.tool} onChange={props.onToolChange} />}
       </div>
       <div className="flex items-center gap-2">
         <TooltipButton label="Undo" onClick={props.onUndo} disabled={!props.historyCount}><Undo2Icon /></TooltipButton>
@@ -363,8 +360,65 @@ function TopBar(props: EditorProps) {
           onExport={props.onExport}
           onPreviewToggle={props.onPreviewToggle}
         />
+        <EditorHelp />
+        <Separator orientation="vertical" className="mx-1 h-6" />
+        {[
+          { href: "https://github.com/mertdogar/phaser-procedural-walls", label: "GitHub repository", Icon: GitHubMark },
+        ].map(({ href, label, Icon }) => (
+          <Tooltip key={href}>
+            <TooltipTrigger asChild>
+              <Button asChild variant="ghost" size="icon-sm">
+                <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`${label} (opens in a new tab)`}><Icon /></a>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{label} (opens in a new tab)</TooltipContent>
+          </Tooltip>
+        ))}
       </div>
     </header>
+  );
+}
+
+function GitHubMark() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.65 7.65 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+    </svg>
+  );
+}
+
+function EditorHelp() {
+  return (
+    <Dialog>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="Help"><CircleHelpIcon /></Button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Help</TooltipContent>
+      </Tooltip>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Wallcraft help</DialogTitle>
+          <DialogDescription>Navigate the map, edit walls, and try your layout.</DialogDescription>
+        </DialogHeader>
+        <dl className="grid gap-4 text-sm">
+          {[
+            ["Pan", "Two-finger scroll on a trackpad, scroll with a mouse, or drag with the middle mouse button."],
+            ["Zoom", "Pinch on a trackpad, use Ctrl + mouse wheel, or click the − and + buttons. Fit map frames the full layout."],
+            ["Edit", "Use the wall tool to draw on the 32 px grid. Use Select or click a layer to edit a wall, then drag its endpoints or windows."],
+            ["Preview", "Click Preview, then use the arrow keys to move the character. Wall collisions are enabled. Exit preview to resume editing."],
+            ["Save", "Export JSON before closing or reloading. Your map is kept in memory, not saved automatically."],
+          ].map(([label, description]) => (
+            <div key={label} className="flex flex-col gap-1">
+              <dt className="font-medium">{label}</dt>
+              <dd className="text-muted-foreground">{description}</dd>
+            </div>
+          ))}
+        </dl>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -433,18 +487,19 @@ function FileActions({ preview, onImport, onExport, onPreviewToggle }: {
   );
 }
 
-function ToolPicker({ tool, onChange, vertical = false }: { tool: EditorTool; onChange: (tool: EditorTool) => void; vertical?: boolean }) {
+function ToolPicker({ tool, onChange }: { tool: EditorTool; onChange: (tool: EditorTool) => void }) {
   return (
     <ToggleGroup
       type="single"
       variant="outline"
       value={tool}
       onValueChange={(value) => value && onChange(value as EditorTool)}
-      orientation={vertical ? "vertical" : "horizontal"}
-      className={vertical ? "flex-col bg-background p-1 shadow-lg" : "bg-background"}
+      orientation="horizontal"
+      size="sm"
+      aria-label="Wall tools"
     >
-      <ToggleGroupItem value="select" aria-label="Select walls"><MousePointer2Icon />{!vertical && "Select"}</ToggleGroupItem>
-      <ToggleGroupItem value="wall" aria-label="Draw walls"><BrickWallIcon />{!vertical && "Draw wall"}</ToggleGroupItem>
+      <ToggleGroupItem value="select" aria-label="Select walls" title="Select walls"><MousePointer2Icon /></ToggleGroupItem>
+      <ToggleGroupItem value="wall" aria-label="Draw walls" title="Draw walls"><BrickWallIcon /></ToggleGroupItem>
     </ToggleGroup>
   );
 }
@@ -469,12 +524,15 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
   };
   const automaticDepth = resolveWalls(config.walls, config.presets)[selectedIndex]?.depth ?? 0;
   const wallLength = Math.abs(wall.x2 - wall.x1) + Math.abs(wall.y2 - wall.y1);
-  const updateWindowOffset = (windowIndex: number, value: string) => {
-    const offset = Number(value);
+  const updateWindow = (windowIndex: number, key: "offset" | "width", value: string) => {
+    const number = Number(value);
     const window = wall.windows?.[windowIndex];
-    if (!window || !Number.isFinite(offset)) return;
+    if (!window || value === "" || !Number.isFinite(number)) return;
+    const maximum = wallLength - (key === "offset" ? window.width : window.offset);
+    const minimum = key === "offset" ? 0 : 1;
+    if (maximum < minimum) return;
     const windows = wall.windows?.map((item, index) => index === windowIndex
-      ? { ...item, offset: Math.min(Math.max(0, offset), Math.max(0, wallLength - item.width)) }
+      ? { ...item, [key]: Math.min(Math.max(minimum, number), maximum) }
       : item);
     onUpdateWall(selectedIndex, { windows });
   };
@@ -550,20 +608,28 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
         {(wall.windows?.length ?? 0) > 0 && (
           <FieldGroup className="gap-3">
             {wall.windows?.map((window, windowIndex) => (
-              <Field key={windowIndex} orientation="horizontal">
-                <FieldLabel htmlFor={`window-${selectedIndex}-${windowIndex}`}>Window {windowIndex + 1}</FieldLabel>
-                <Input
-                  id={`window-${selectedIndex}-${windowIndex}`}
-                  className="w-28"
-                  type="number"
-                  min="0"
-                  max={Math.max(0, wallLength - window.width)}
-                  step="32"
-                  value={window.offset}
-                  onChange={(event) => updateWindowOffset(windowIndex, event.target.value)}
-                  aria-label={`Window ${windowIndex + 1} offset`}
-                />
-              </Field>
+              <div key={windowIndex} className="space-y-3">
+                <p className="text-sm font-medium">Window {windowIndex + 1}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {(["offset", "width"] as const).map((key) => (
+                    <Field key={key}>
+                      <FieldLabel htmlFor={`window-${selectedIndex}-${windowIndex}-${key}`}>
+                        {key === "offset" ? "Offset (px)" : "Width (px)"}
+                      </FieldLabel>
+                      <Input
+                        id={`window-${selectedIndex}-${windowIndex}-${key}`}
+                        type="number"
+                        min={key === "offset" ? 0 : 1}
+                        max={Math.max(0, wallLength - (key === "offset" ? window.width : window.offset))}
+                        step="1"
+                        value={window[key]}
+                        onChange={(event) => updateWindow(windowIndex, key, event.target.value)}
+                        aria-label={`Window ${windowIndex + 1} ${key}`}
+                      />
+                    </Field>
+                  ))}
+                </div>
+              </div>
             ))}
           </FieldGroup>
         )}

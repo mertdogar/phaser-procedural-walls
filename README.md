@@ -2,7 +2,7 @@
 
 A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of data. You describe wall centerlines and window positions; the plugin draws thick wall bodies, a front face, see-through windows with sills, and optional Arcade Physics colliders, and it depth-sorts each wall so characters walk in front of and behind walls correctly.
 
-![Wallcraft editor with a selected wall and geometry inspector](docs/images/wallcraft-editor.png)
+![Wallcraft editor with a selected wall, layers panel, and docked inspector](docs/images/wallcraft-editor.png)
 
 ## Features
 
@@ -10,9 +10,12 @@ A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of 
 - Per-wall style presets: flat colors or tiled textures for the wall top and its face
 - Windows cut into the face with translucent glass and an opaque sill
 - One depth-sorted Container per wall, so `sprite.setDepth(sprite.y)` is all a character needs
-- Optional Arcade static bodies: a thin plane under horizontal walls, a full rectangle for vertical ones
+- Optional Arcade static bodies matching each wall's bottom footprint
 - Pure geometry module with unit tests, no Phaser needed to test it
 - Wallcraft editor prototype: draw walls, drag endpoints and windows, edit height and drawing order, and manage presets
+- Resizable layers and inspector panels with wall selection, duplication, deletion, and reordering
+- Full-pane canvas with origin axes, two-finger scrolling to pan, and pinching to zoom
+- Map preferences for applying height or thickness to all existing walls
 - Upload tiled textures, export/import maps with embedded images, and test collisions in a playable preview
 
 ## Try Wallcraft
@@ -25,7 +28,9 @@ npx @mertdogar/phaser-procedural-walls@latest editor
 pnpx @mertdogar/phaser-procedural-walls@latest editor
 ```
 
-This command requires a release that includes the editor CLI. For a source checkout, use:
+This command requires a release that includes the editor CLI. This README and
+its screenshots describe the current repository; the published npm release may
+not include the latest editor and geometry changes. To use the repository version:
 
 ```bash
 pnpm install
@@ -88,7 +93,7 @@ player.setDepth(player.y);
 - [Quick start](docs/quickstart.md). Build a walkable room with a window from an empty folder.
 - [Wallcraft guide](docs/wallcraft.md). Edit maps, manage presets and textures, test collisions, and export to Phaser.
 - [API reference](docs/api.md). Every config field, preset option, and method.
-- [How it works](docs/how-it-works.md). Corner filling, depth sorting, the collision plane, and window holes.
+- [How it works](docs/how-it-works.md). Corner filling, depth sorting, collision footprints, and window holes.
 
 ## Agent skill
 
@@ -115,7 +120,8 @@ npx skills add mertdogar/phaser-procedural-walls --list
 Start a new agent session if needed, then ask, for example:
 “Use the phaser-procedural-walls skill to load my Wallcraft export into a Phaser
 scene with player collisions.” The skill is distributed in Git, not in the npm
-package. Its bundled references describe version 0.2.0.
+package. Its bundled references track the repository, including changes made
+after the original 0.2.0 release.
 
 ## Develop
 

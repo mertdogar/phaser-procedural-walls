@@ -12,8 +12,9 @@ description: >-
 # Procedural walls and Wallcraft
 
 Help developers use the library's existing data model and APIs. These bundled
-references describe version 0.2.0; check the consumer's installed version and
-types before assuming newer or older releases behave identically.
+references track repository source, including changes after the original 0.2.0
+release. Check the consumer's installed version and types before assuming its
+editor or collision behavior matches these references.
 
 ## Workflow
 

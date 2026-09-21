@@ -23,17 +23,18 @@ There is no CLI JSON-input argument or headless export command.
 
 Use the editor controls to work with the same fields as the library config.
 
-In the repository editor, **Fit map** frames the floor plan. Scroll or use the
-zoom buttons, and drag with the hand tool to pan. Editing isn't limited to the
-initial viewport, and preview follows the moving player. These navigation
-controls require a release containing the large-map editor fix; the original
-0.2.0 editor has a fixed viewport.
+In the repository editor, **Fit map** frames the floor plan. Two-finger scrolling
+pans; pinching or Ctrl+wheel zooms around the cursor. The zoom buttons and
+middle-button panning also work. There is no hand tool. The canvas fills its
+pane, and world axes mark `(0, 0)`. Preview follows the moving player. These
+controls describe current source, not necessarily the published npm release;
+the original 0.2.0 editor has a fixed viewport.
 
 1. Draw axis-aligned walls on the 32px grid. Switch to **Select** and click a
    wall to inspect it.
 2. Drag endpoint anchors or edit coordinates. Drag windows along the wall or
-   edit their offsets rather than relying on even spacing. Change window
-   widths in JSON; the inspector only exposes offsets.
+   edit their offsets rather than relying on even spacing. Set **Width (px)**
+   beside **Offset (px)** in the inspector to resize each opening within the wall.
 3. Edit thickness and height independently. Height affects the rendered face;
    it isn't a physical elevation. Clear drawing depth for automatic ordering,
    or set a larger value to draw a wall later.
@@ -47,8 +48,29 @@ controls require a release containing the large-map editor fix; the original
 
 Wall `height` overrides preset `lipHeight`. To restore inheritance, remove
 that wall's `height` field in JSON; don't substitute zero, which disables the
-face. Undo/redo covers add, delete, reset, import, and saved preset edits, not
-every direct field change or drag.
+face. Undo/redo covers add, duplicate, delete, reorder, bulk dimensions, reset,
+import, and saved preset edits, not every direct field change or drag.
+
+## Layers and map preferences
+
+The resizable right sidebar contains Layers above Wall inspector. Its width and
+vertical split can be adjusted independently. Selecting a layer selects its wall.
+The list is front-to-back; arrow buttons move the selected wall one position by
+writing explicit depths, which persist in exports. Reordering does not move
+colliders. Clear Drawing order to restore automatic depth for an individual wall.
+Duplicate copies windows and offsets the selected copy by 32 px on both axes.
+Delete removes the selected segment. Layer reordering is not drag-and-drop.
+
+Map preferences applies height or thickness to every existing wall using separate
+Apply to all buttons. Height accepts zero; thickness must be positive. Bulk
+height replaces wall overrides. Presets and future walls remain unchanged.
+
+Blank preset Sill height follows each wall's thickness, clipped to window height.
+Explicit values, including those imported from older maps, override this; zero
+disables sills. A short opening can be fully covered by its sill.
+
+Preview collisions use body footprints shifted south by face height. Keep face
+heights equal around aligned doorway gaps. Windows remain visual, not walkable.
 
 ## Assign images to presets
 
