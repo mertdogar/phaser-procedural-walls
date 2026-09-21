@@ -1,8 +1,10 @@
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CopyIcon,
   BrickWallIcon,
   DownloadIcon,
   FileUpIcon,
-  HandIcon,
   MousePointer2Icon,
   PlayIcon,
   PlusIcon,
@@ -31,6 +33,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -168,6 +171,28 @@ export default function App() {
     onSelectWall: setSelectedIndex,
     onUpdateWall: updateWall,
     onDeleteSelected: deleteSelected,
+    onDuplicateSelected: () => {
+      if (selectedIndex === null) return;
+      const wall = config.walls[selectedIndex];
+      commitConfig({ ...config, walls: [...config.walls, {
+        ...wall, x1: wall.x1 + 32, y1: wall.y1 + 32, x2: wall.x2 + 32, y2: wall.y2 + 32,
+        windows: wall.windows?.map((window) => ({ ...window })),
+      }] });
+      setSelectedIndex(config.walls.length);
+      setTool("select");
+    },
+    onMoveSelected: (direction) => {
+      const layers = orderedLayers(config);
+      const position = layers.findIndex((layer) => layer.index === selectedIndex);
+      const target = position + direction;
+      if (position < 0 || target < 0 || target >= layers.length) return;
+      const depths = layers.map((layer) => layer.depth);
+      for (let i = depths.length - 2; i >= 0; i--) depths[i] = Math.max(depths[i], depths[i + 1] + 1);
+      [layers[position], layers[target]] = [layers[target], layers[position]];
+      const walls = [...config.walls];
+      layers.forEach((layer, index) => { walls[layer.index] = { ...walls[layer.index], depth: depths[index] }; });
+      commitConfig({ ...config, walls });
+    },
     onUndo: undo,
     onRedo: redo,
     onReset: reset,
@@ -214,6 +239,8 @@ interface EditorProps {
   onSelectWall: (index: number | null) => void;
   onUpdateWall: (index: number, patch: Partial<WallSpec>) => void;
   onDeleteSelected: () => void;
+  onDuplicateSelected: () => void;
+  onMoveSelected: (direction: -1 | 1) => void;
   onUndo: () => void;
   onRedo: () => void;
   onReset: () => void;
@@ -228,34 +255,89 @@ function Editor(props: EditorProps) {
   return (
     <div className="flex h-screen min-h-[680px] flex-col bg-background">
       <TopBar {...props} />
-      <main className="relative min-h-0 flex-1 p-3">
-        <div className="size-full overflow-hidden rounded-xl border bg-muted shadow-inner">
-          <WallCanvas {...canvasProps(props)} />
-        </div>
-        {!props.preview && (
-          <>
-            <div className="absolute top-8 left-8">
-              <ToolPicker tool={props.tool} onChange={props.onToolChange} vertical />
+      <main className="min-h-0 flex-1 p-3">
+        <ResizablePanelGroup orientation="horizontal" className="rounded-xl border">
+          <ResizablePanel id="map" defaultSize="72%" minSize="30%">
+            <div className="relative size-full overflow-hidden bg-muted shadow-inner">
+              <WallCanvas {...canvasProps(props)} />
+              {!props.preview && <div className="absolute top-4 left-4">
+                <ToolPicker tool={props.tool} onChange={props.onToolChange} vertical />
+              </div>}
+              <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 rounded-full border bg-background px-3 py-2 text-center text-xs text-muted-foreground shadow-sm">
+                {props.preview ? "Arrow keys to move · wall collisions enabled" : "Two-finger scroll to pan · pinch to zoom"}
+              </div>
             </div>
-            <Card className="absolute top-8 right-8 max-h-[calc(100%-4rem)] w-80 gap-4 overflow-hidden py-4 shadow-xl">
-              <CardHeader className="px-4">
-                <CardTitle>Wall inspector</CardTitle>
-                <CardDescription>Select a wall to edit its geometry.</CardDescription>
-              </CardHeader>
-              <CardContent className="min-h-0 overflow-auto px-4">
-                <WallInspector {...inspectorProps(props)} />
-              </CardContent>
-              <CardFooter className="px-4">
-                <SelectionFooter {...props} />
-              </CardFooter>
-            </Card>
-          </>
-        )}
-        <div className="absolute bottom-7 left-1/2 -translate-x-1/2 rounded-full border bg-background px-4 py-2 text-xs text-muted-foreground shadow-sm">
-          {props.preview ? "Arrow keys to move · wall collisions enabled" : "32 px snap · scroll to zoom · hand tool to pan"}
-        </div>
+          </ResizablePanel>
+          {!props.preview && <>
+            <ResizableHandle withHandle aria-label="Resize sidebar" />
+            <ResizablePanel id="sidebar" defaultSize="28%" minSize="280px" maxSize="60%">
+              <ResizablePanelGroup orientation="vertical">
+                <ResizablePanel id="layers" defaultSize="40%" minSize="160px">
+                  <LayersPanelPrototype {...props} />
+                </ResizablePanel>
+                <ResizableHandle withHandle aria-label="Resize layers and inspector" />
+                <ResizablePanel id="inspector" defaultSize="60%" minSize="200px">
+                  <Card className="h-full gap-4 overflow-hidden rounded-none border-0 py-4 shadow-none">
+                    <CardHeader className="px-4">
+                      <CardTitle>Wall inspector</CardTitle>
+                      <CardDescription>Select a wall to edit its geometry.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="min-h-0 flex-1 overflow-auto px-4">
+                      <WallInspector {...inspectorProps(props)} />
+                    </CardContent>
+                    <CardFooter className="px-4">
+                      <SelectionFooter {...props} />
+                    </CardFooter>
+                  </Card>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            </ResizablePanel>
+          </>}
+        </ResizablePanelGroup>
       </main>
     </div>
+  );
+}
+
+function orderedLayers(config: WallMapConfig) {
+  return resolveWalls(config.walls, config.presets)
+    .map((wall, index) => ({ index, depth: wall.depth }))
+    .sort((a, b) => b.depth - a.depth || b.index - a.index);
+}
+
+function LayersPanelPrototype(props: EditorProps) {
+  const layers = orderedLayers(props.config);
+  const position = layers.findIndex((layer) => layer.index === props.selectedIndex);
+  return (
+    <Card className="h-full gap-3 overflow-hidden rounded-none border-0 py-4 shadow-none">
+      <CardHeader className="px-4">
+        <CardTitle>Layers <span className="text-muted-foreground">({layers.length})</span></CardTitle>
+        <CardDescription>Front to back · select a wall to manage it.</CardDescription>
+      </CardHeader>
+      <CardContent className="min-h-0 flex-1 overflow-auto px-2">
+        <div className="flex flex-col gap-1" aria-label="Wall layers">
+          {layers.map(({ index }) => {
+            const wall = props.config.walls[index];
+            return <Button key={index} variant={props.selectedIndex === index ? "secondary" : "ghost"}
+              className="h-auto justify-start px-3 py-2" aria-pressed={props.selectedIndex === index}
+              onClick={() => { props.onSelectWall(index); props.onToolChange("select"); }}>
+              <BrickWallIcon data-icon="inline-start" />
+              <span className="min-w-0 text-left">
+                <span className="block truncate">Wall {index + 1} · {wall.preset ?? "Default"}</span>
+                <span className="block truncate text-xs text-muted-foreground">{wall.x1}, {wall.y1} → {wall.x2}, {wall.y2}</span>
+              </span>
+            </Button>;
+          })}
+          {!layers.length && <p className="px-2 text-sm text-muted-foreground">Draw or import walls to create layers.</p>}
+        </div>
+      </CardContent>
+      <CardFooter className="gap-1 px-4">
+        <TooltipButton label="Bring wall forward" disabled={position <= 0} onClick={() => props.onMoveSelected(-1)}><ArrowUpIcon /></TooltipButton>
+        <TooltipButton label="Send wall backward" disabled={position < 0 || position === layers.length - 1} onClick={() => props.onMoveSelected(1)}><ArrowDownIcon /></TooltipButton>
+        <TooltipButton label="Duplicate wall" disabled={position < 0} onClick={props.onDuplicateSelected}><CopyIcon /></TooltipButton>
+        <TooltipButton label="Delete wall" disabled={position < 0} onClick={props.onDeleteSelected}><Trash2Icon /></TooltipButton>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -363,7 +445,6 @@ function ToolPicker({ tool, onChange, vertical = false }: { tool: EditorTool; on
     >
       <ToggleGroupItem value="select" aria-label="Select walls"><MousePointer2Icon />{!vertical && "Select"}</ToggleGroupItem>
       <ToggleGroupItem value="wall" aria-label="Draw walls"><BrickWallIcon />{!vertical && "Draw wall"}</ToggleGroupItem>
-      <ToggleGroupItem value="pan" aria-label="Pan map"><HandIcon />{!vertical && "Pan"}</ToggleGroupItem>
     </ToggleGroup>
   );
 }
@@ -629,7 +710,7 @@ function PresetForm({ name, preset, names, usage, textures, onSave, onDelete }: 
           ["edgeWidth", "Outline width", 2, 16, 1],
           ["windowInset", "Window inset", 0.6, 1, 0.01],
           ["windowAlpha", "Glass opacity", 0.5, 1, 0.01],
-          ["sillHeight", "Sill height", 8, 64, 1],
+          ["sillHeight", "Sill height", "Wall thickness", 64, 1],
         ] as const).map(([key, label, fallback, max, step]) => (
           <Field key={key}>
             <FieldLabel htmlFor={`preset-${key}`}>{label}</FieldLabel>
@@ -696,7 +777,7 @@ function ImportDialog({ open, value, error, onOpenChange, onValueChange, onApply
 
 function TooltipButton({ label, children, ...props }: React.ComponentProps<typeof Button> & { label: string }) {
   return (
-    <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon-sm" {...props}>{children}</Button></TooltipTrigger><TooltipContent>{label}</TooltipContent></Tooltip>
+    <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={label} {...props}>{children}</Button></TooltipTrigger><TooltipContent>{label}</TooltipContent></Tooltip>
   );
 }
 

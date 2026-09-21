@@ -78,7 +78,7 @@ The upload control accepts files up to 5 MB each. Images repeat at their origina
 | `windowAlpha` | `number` | `0.5` | Glass alpha. `1` makes windows opaque. |
 | `windowFrame` | `number` | none | When set, a 1px frame is stroked around each window. |
 | `windowInset` | `number` | `0.6` | Fraction of the face height (or body thickness when there is no face) the window occupies. |
-| `sillHeight` | `number` | `8` | Height of the opaque band at the bottom of each face window, clamped to the window height. `0` disables sills. |
+| `sillHeight` | `number` | Wall thickness | Height of the opaque band at the bottom of each face window, clamped to the window height. Omit to follow each wall's thickness; an explicit number overrides it. `0` disables sills. |
 
 Texture keys must exist in the scene's Texture Manager before `wallMap` is called.
 

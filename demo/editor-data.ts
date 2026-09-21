@@ -30,7 +30,6 @@ export const initialConfig: WallMapConfig = {
       windowFill: 0x8fc7d2,
       windowFrame: 0x315c64,
       windowInset: 0.65,
-      sillHeight: 5,
       windowAlpha: 0.72,
     },
     interior: {
@@ -42,7 +41,6 @@ export const initialConfig: WallMapConfig = {
       windowFill: 0x9fcbd3,
       windowFrame: 0x315c64,
       windowInset: 0.65,
-      sillHeight: 4,
       windowAlpha: 0.7,
     },
     accent: {

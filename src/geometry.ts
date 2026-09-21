@@ -1,6 +1,6 @@
 import type { Rect, ResolvedWall, WallPreset, WallSpec } from "./types";
 
-const DEFAULTS = { edgeWidth: 2, lipHeight: 0, windowInset: 0.6, sillHeight: 8 };
+const DEFAULTS = { edgeWidth: 2, lipHeight: 0, windowInset: 0.6 };
 const PLANE_THICKNESS = 8;
 
 function normalize(w: WallSpec): WallSpec {
@@ -73,7 +73,7 @@ export function resolveWalls(
     if (!preset) throw new Error(`Unknown wall preset "${w.preset}"`);
     const lipHeight = w.height ?? preset.lipHeight ?? DEFAULTS.lipHeight;
     const inset = preset.windowInset ?? DEFAULTS.windowInset;
-    const sillHeight = preset.sillHeight ?? DEFAULTS.sillHeight;
+    const sillHeight = preset.sillHeight ?? w.thickness;
     const t = w.thickness;
     const half = t / 2;
     const extStart = endExtension(w.x1, w.y1, w, normalized);

@@ -22,22 +22,25 @@ export function WallCanvas({ config, selectedIndex, tool, preview, onAddWall, on
 
   useEffect(() => {
     if (!hostRef.current) return;
+    const host = hostRef.current;
     const scene = new EditorScene(config, setTextureError);
     sceneRef.current = scene;
     const game = new Phaser.Game({
       type: Phaser.AUTO,
-      parent: hostRef.current,
-      width: 960,
-      height: 640,
+      parent: host,
+      width: host.clientWidth,
+      height: host.clientHeight,
       backgroundColor: "#f2efe8",
       physics: { default: "arcade" },
-      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: 960, height: 640 },
+      input: { mouse: { preventDefaultWheel: true } },
+      scale: { mode: Phaser.Scale.NONE },
       scene,
     });
-    const refresh = () => game.scale.refresh();
+    const refresh = () => {
+      game.scale.resize(host.clientWidth, host.clientHeight);
+    };
     const observer = new ResizeObserver(refresh);
-    observer.observe(hostRef.current);
-    requestAnimationFrame(refresh);
+    observer.observe(host);
     return () => {
       observer.disconnect();
       sceneRef.current = null;

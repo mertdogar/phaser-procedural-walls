@@ -72,7 +72,7 @@ describe("editor world coordinates", () => {
     Object.assign(scene.cameras.main, camera);
     scene.fitMap();
     const bounds = getMapBounds(config);
-    expect(bounds.width * scene.cameras.main.zoom).toBeLessThanOrEqual(960 * 0.65);
+    expect(bounds.width * scene.cameras.main.zoom).toBeLessThanOrEqual(960 * 0.9);
     expect(bounds.height * scene.cameras.main.zoom).toBeLessThanOrEqual(560);
     expect(camera.centerOn).toHaveBeenCalled();
   });
@@ -83,13 +83,50 @@ describe("editor world coordinates", () => {
     const scene = new EditorScene(config, vi.fn());
     Object.assign(scene.cameras.main, { zoom: 0.5, scrollX: 1000, scrollY: 800 });
     Object.assign(scene, { input: { setDefaultCursor: vi.fn() } });
-    scene.setEditorState(config, null, "pan", false, { onAddWall, onSelectWall: vi.fn(), onUpdateWall: vi.fn() });
-    scene["handlePointerDown"]({ x: 100, y: 100 } as Phaser.Input.Pointer);
+    scene.setEditorState(config, null, "wall", false, { onAddWall, onSelectWall: vi.fn(), onUpdateWall: vi.fn() });
+    scene["handlePointerDown"]({ x: 100, y: 100, middleButtonDown: () => true } as Phaser.Input.Pointer);
     scene["handlePointerMove"]({ x: 200, y: 150 } as Phaser.Input.Pointer);
     scene["handlePointerUp"]({} as Phaser.Input.Pointer);
     expect(scene.cameras.main.scrollX).toBe(800);
     expect(scene.cameras.main.scrollY).toBe(700);
     expect(onAddWall).not.toHaveBeenCalled();
+  });
+
+  it.each([[0, 1], [1, 16], [2, 480]])("pans both axes with wheel delta mode %s", (deltaMode, unit) => {
+    const scene = new EditorScene({ presets: {}, walls: [] }, vi.fn());
+    Object.assign(scene, { scale: { displayScale: { x: 2, y: 2 }, canvasBounds: { height: 480 } } });
+    Object.assign(scene.cameras.main, { zoom: 0.5, scrollX: 100, scrollY: 200 });
+    const zoom = vi.spyOn(scene, "zoomBy");
+    scene["handleWheel"]({ event: { deltaX: 3, deltaY: -5, deltaMode, ctrlKey: false } } as Phaser.Input.Pointer);
+    expect(scene.cameras.main.scrollX).toBe(100 + 12 * unit);
+    expect(scene.cameras.main.scrollY).toBe(200 - 20 * unit);
+    expect(zoom).not.toHaveBeenCalled();
+  });
+
+  it("draws world origin axes across the entire visible viewport", () => {
+    const scene = new EditorScene({ presets: {}, walls: [] }, vi.fn());
+    const grid = { clear: vi.fn().mockReturnThis(), lineStyle: vi.fn().mockReturnThis(), lineBetween: vi.fn(), strokeCircle: vi.fn() };
+    Object.assign(scene, { grid });
+    Object.assign(scene.cameras.main, { zoom: 0.5, preRender: vi.fn(), worldView: { x: -500, y: -1000, right: 500, bottom: 1000 } });
+    scene["drawGrid"]();
+    expect(grid.lineBetween).toHaveBeenCalledWith(-500, 0, 500, 0);
+    expect(grid.lineBetween).toHaveBeenCalledWith(0, -1000, 0, 1000);
+    expect(grid.strokeCircle).toHaveBeenCalledWith(0, 0, 8);
+  });
+
+  it("zooms pinch gestures at the pointer without panning", () => {
+    const scene = new EditorScene({ presets: {}, walls: [] }, vi.fn());
+    const zoom = vi.spyOn(scene, "zoomBy").mockImplementation(() => {});
+    scene["handleWheel"]({ x: 300, y: 200, event: { deltaX: 0, deltaY: -10, deltaMode: 0, ctrlKey: true } } as Phaser.Input.Pointer);
+    expect(zoom).toHaveBeenCalledWith(Math.exp(0.1), 300, 200);
+  });
+
+  it("ignores navigation gestures while drawing a wall", () => {
+    const scene = new EditorScene({ presets: {}, walls: [] }, vi.fn());
+    scene["handlePointerDown"](pointer(32, 32));
+    const zoom = vi.spyOn(scene, "zoomBy");
+    scene["handleWheel"]({ event: { deltaY: -10, ctrlKey: true } } as Phaser.Input.Pointer);
+    expect(zoom).not.toHaveBeenCalled();
   });
 
   it("expands the actual scene physics bounds when loading a large map", async () => {

@@ -41,6 +41,18 @@ describe("resolveWalls", () => {
     expect(flat.sills).toEqual([]);
   });
 
+  it.each([8, 20, 40])("uses wall thickness %s for the window sill", (thickness) => {
+    const [resolved] = resolveWalls([wall(0, 0, 100, 0, { thickness, height: 100, windows: [{ offset: 30, width: 20 }] })], presets);
+    expect(resolved.sills[0].h).toBe(thickness);
+    expect(resolved.sills[0].y + resolved.sills[0].h).toBe(resolved.windows[0].y + resolved.windows[0].h);
+  });
+
+  it("preserves explicit sill overrides and disabled sills", () => {
+    const spec = wall(0, 0, 100, 0, { height: 100, windows: [{ offset: 30, width: 20 }] });
+    expect(resolveWalls([spec], { p: { ...presets.p, sillHeight: 5 } })[0].sills[0].h).toBe(5);
+    expect(resolveWalls([spec], { p: { ...presets.p, sillHeight: 0 } })[0].sills).toEqual([]);
+  });
+
   it("lets a wall override its preset height", () => {
     const [resolved] = resolveWalls([wall(0, 0, 100, 0, { height: 30 })], presets);
     expect(resolved.lip).toEqual({ x: 0, y: 10, w: 100, h: 30 });

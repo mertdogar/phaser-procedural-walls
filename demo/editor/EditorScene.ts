@@ -4,7 +4,7 @@ import { WallMap } from "../../src/WallMap";
 import type { WallSpec, WindowSpec } from "../../src/types";
 import { getMapBounds, GRID_SIZE, type WallMapConfig } from "../editor-data";
 
-export type EditorTool = "select" | "wall" | "pan";
+export type EditorTool = "select" | "wall";
 
 interface EditorCallbacks {
   onAddWall: (wall: WallSpec) => void;
@@ -30,6 +30,7 @@ export class EditorScene extends Phaser.Scene {
   private textureSources = new Map<string, string>();
   private overlay!: Phaser.GameObjects.Graphics;
   private grid!: Phaser.GameObjects.Graphics;
+  private originLabel!: Phaser.GameObjects.Text;
   private panStart: { x: number; y: number; scrollX: number; scrollY: number } | null = null;
   private tool: EditorTool = "wall";
   private selectedIndex: number | null = null;
@@ -55,6 +56,7 @@ export class EditorScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor(0xf2efe8);
     this.grid = this.add.graphics().setDepth(-100);
+    this.originLabel = this.add.text(0, 0, "0, 0", { fontSize: "12px", color: "#53675a", backgroundColor: "#f2efe8", padding: { x: 4, y: 2 } }).setDepth(-99);
     this.fitMap();
     this.drawGrid();
     this.overlay = this.add.graphics().setDepth(10000);
@@ -63,10 +65,9 @@ export class EditorScene extends Phaser.Scene {
     this.input.on("pointermove", this.handlePointerMove, this);
     this.input.on("pointerup", this.handlePointerUp, this);
     this.input.on("pointerupoutside", this.handlePointerUp, this);
-    this.input.on("wheel", (pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
-      if (this.drawStart || this.anchorDrag || this.windowDrag || this.panStart) return;
-      this.zoomBy(Math.exp(-dy * 0.001), pointer.x, pointer.y);
-    });
+    this.input.on("wheel", this.handleWheel, this);
+    this.scale.on("resize", this.drawGrid, this);
+    this.events.once("shutdown", () => this.scale.off("resize", this.drawGrid, this));
     this.drawOverlay();
     void this.refreshWalls();
   }
@@ -140,9 +141,9 @@ export class EditorScene extends Phaser.Scene {
   fitMap(): void {
     const bounds = getMapBounds(this.configData);
     const camera = this.cameras.main;
-    const availableWidth = camera.width * (this.preview ? 0.9 : 0.65);
+    const availableWidth = camera.width * 0.9;
     camera.setZoom(Math.min(1, availableWidth / bounds.width, (camera.height - 80) / bounds.height));
-    camera.centerOn(bounds.x + bounds.width / 2 + (camera.width - availableWidth) / (2 * camera.zoom), bounds.y + bounds.height / 2);
+    camera.centerOn(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     this.drawGrid();
     this.drawOverlay();
   }
@@ -171,10 +172,30 @@ export class EditorScene extends Phaser.Scene {
     this.grid.clear().lineStyle(1 / camera.zoom, 0xd8d4ca, 0.72);
     for (let x = Math.floor(view.x / step) * step; x <= view.right; x += step) this.grid.lineBetween(x, view.y, x, view.bottom);
     for (let y = Math.floor(view.y / step) * step; y <= view.bottom; y += step) this.grid.lineBetween(view.x, y, view.right, y);
+    this.grid.lineStyle(2 / camera.zoom, 0x718c79, 0.9);
+    this.grid.lineBetween(view.x, 0, view.right, 0);
+    this.grid.lineBetween(0, view.y, 0, view.bottom);
+    this.grid.strokeCircle(0, 0, 4 / camera.zoom);
+    this.originLabel?.setPosition(8 / camera.zoom, 8 / camera.zoom).setScale(1 / camera.zoom);
+  }
+
+  private handleWheel(pointer: Phaser.Input.Pointer): void {
+    if (this.drawStart || this.anchorDrag || this.windowDrag || this.panStart) return;
+    const event = pointer.event as WheelEvent;
+    const camera = this.cameras.main;
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? this.scale.canvasBounds.height : 1;
+    if (event.ctrlKey) {
+      this.zoomBy(Math.exp(-event.deltaY * unit * 0.01), pointer.x, pointer.y);
+      return;
+    }
+    camera.scrollX += event.deltaX * unit * this.scale.displayScale.x / camera.zoom;
+    camera.scrollY += event.deltaY * unit * this.scale.displayScale.y / camera.zoom;
+    this.drawGrid();
+    this.drawOverlay();
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if ((this.tool === "pan" && !this.preview) || pointer.middleButtonDown()) {
+    if (pointer.middleButtonDown()) {
       const camera = this.cameras.main;
       this.panStart = { x: pointer.x, y: pointer.y, scrollX: camera.scrollX, scrollY: camera.scrollY };
       this.input.setDefaultCursor("grabbing");

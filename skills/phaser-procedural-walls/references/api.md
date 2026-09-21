@@ -76,7 +76,7 @@ normalization. Windows don't remove physics bodies.
 | `windowAlpha` | `0.5` | Glass opacity |
 | `windowFrame` | absent | Optional 1px frame color |
 | `windowInset` | `0.6` | Fraction of face height or body thickness |
-| `sillHeight` | `8` | Opaque sill height, clamped to window height |
+| `sillHeight` | Wall thickness | Opaque sill height, clamped to window height; an explicit value overrides it, and `0` disables it |
 | `texture` | absent | Loaded texture key for body and sills |
 | `lipTexture` | absent | Loaded texture key for face |
 
