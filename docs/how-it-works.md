@@ -32,7 +32,17 @@ Vertical walls use the same rule with their bottom end as the south edge. A char
 
 A single Container for the whole map cannot do this, since one depth value cannot be both above and below the player. That is why the plugin returns a handle over many containers instead of one Game Object.
 
-Wallcraft's **Drawing order** field sets the wall's absolute `depth`. Higher values draw later, including relative to characters. This can fix an overlapping junction, but an extreme value can also keep a wall in front of a character who should appear in front of it. Leave the field blank to restore automatic sorting and check overrides in Preview. Changing depth does not move the collider.
+Wallcraft's **Drawing order** field sets the wall's absolute `depth`. Higher
+values draw later. These overrides persist in JSON and don't move colliders.
+In a consumer game, feet-y sorting alone may no longer match custom wall depths.
+Leave the field blank for automatic sorting, or implement character sorting
+that accounts for the overrides.
+
+Wallcraft preview handles this separately: it compares the player's feet with
+the bottom footprints of overlapping walls and places the player relative to
+their drawing depths without changing wall order. If custom wall orders conflict
+with the required player order, preview prioritizes walls hiding the player.
+This logic is editor-only; exporting JSON does not add it to your game.
 
 ## Collision
 

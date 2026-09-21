@@ -9,7 +9,7 @@ A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of 
 - Axis-aligned wall segments with automatic corner and T-junction filling
 - Per-wall style presets: flat colors or tiled textures for the wall top and its face
 - Windows cut into the face with translucent glass and an opaque sill
-- One depth-sorted Container per wall, so `sprite.setDepth(sprite.y)` is all a character needs
+- One depth-sorted Container per wall; use `sprite.setDepth(sprite.y)` with automatic wall depths
 - Optional Arcade static bodies matching each wall's bottom footprint
 - Pure geometry module with unit tests, no Phaser needed to test it
 - Wallcraft editor prototype: draw walls, drag endpoints and windows, edit height and drawing order, and manage presets
@@ -17,6 +17,11 @@ A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of 
 - Full-pane canvas with origin axes, two-finger scrolling to pan, and pinching to zoom
 - Map preferences for applying height or thickness to all existing walls
 - Upload tiled textures, export/import maps with embedded images, and test collisions in a playable preview
+
+Custom wall drawing orders need matching character-depth handling in your game.
+Wallcraft preview handles player occlusion against wall footprints, but this
+editor-only logic is not included in JSON exports. See the
+[depth convention](docs/api.md#depth-convention).
 
 ## Try Wallcraft
 

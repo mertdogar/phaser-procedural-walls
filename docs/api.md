@@ -130,11 +130,15 @@ Subtracts axis-aligned `holes` from `rect`, assuming all holes share a band acro
 
 ## Depth convention
 
-Characters and props must set their own depth to their feet y each frame:
+With automatic wall depths, set characters and props to their feet y each frame:
 
 ```ts
 sprite.setOrigin(0.5, 1);
 sprite.setDepth(sprite.y);
 ```
 
-The plugin does not track foreign objects.
+Explicit wall depths are absolute drawing orders, not world coordinates. If you
+use them, your game must also position character depth relative to those values;
+feet-y sorting alone may produce incorrect overlaps. The plugin does not track
+foreign objects. Wallcraft's footprint-aware preview sorting is editor behavior,
+not an exported library feature.

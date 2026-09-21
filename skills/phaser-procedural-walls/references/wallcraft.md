@@ -23,6 +23,9 @@ There is no CLI JSON-input argument or headless export command.
 
 Use the editor controls to work with the same fields as the library config.
 
+Select and Draw tools are in the top bar. Its Help button explains navigation,
+editing, preview, and saving; the GitHub button opens the project repository.
+
 In the repository editor, **Fit map** frames the floor plan. Two-finger scrolling
 pans; pinching or Ctrl+wheel zooms around the cursor. The zoom buttons and
 middle-button panning also work. There is no hand tool. The canvas fills its
@@ -71,6 +74,10 @@ disables sills. A short opening can be fully covered by its sill.
 
 Preview collisions use body footprints shifted south by face height. Keep face
 heights equal around aligned doorway gaps. Windows remain visual, not walkable.
+
+Preview also sorts its player against overlapping wall footprints while retaining
+custom wall depths. This is editor-only logic, not part of JSON exports or the
+library. Consumer games need their own character sorting for explicit depths.
 
 ## Assign images to presets
 

@@ -93,6 +93,10 @@ surface color. There are no preset frame, scale, or animation fields.
 
 ## Geometry and depth
 
+Feet-y character sorting assumes automatic wall depths. Explicit depths require
+matching character sorting in the consumer game. Wallcraft's footprint-aware
+preview sorting is editor-only and is not exported with the map.
+
 `resolveWalls(walls, presets)` returns one resolved wall per input wall.
 Endpoints normalize left-to-right or top-to-bottom. At connected endpoints,
 the body extends by half the maximum thickness of an intersecting wall to

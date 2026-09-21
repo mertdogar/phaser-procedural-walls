@@ -52,7 +52,7 @@ without being limited to the initial viewport. The grid shows fewer lines when
 zoomed out, but snapping stays at 32 px. Preview bounds follow the map, and the
 camera follows the player while moving.
 
-1. Choose the wall tool on the left and drag on the map. Drawing snaps to a 32 px grid and locks to a horizontal or vertical line.
+1. Choose the wall tool in the top bar and drag on the map. Drawing snaps to a 32 px grid and locks to a horizontal or vertical line.
 2. Choose the pointer tool and click a wall. Its endpoints and inspector appear.
 3. Drag either circular endpoint to resize the wall. The opposite endpoint stays fixed, and the segment stays axis-aligned.
 4. Use **X1**, **Y1**, **X2**, and **Y2** for numeric coordinates. Keep either X1 = X2 or Y1 = Y2; diagonal walls are unsupported.
@@ -61,8 +61,12 @@ camera follows the player while moving.
 
 ![Selected wall with endpoint handles, layers above the docked inspector, and origin axes](images/wallcraft-editor.png)
 
+Use the **Help** question-mark button in the top bar for navigation, editing,
+preview, and saving instructions. The GitHub button opens the project repository.
+
 The editor and preview screenshots use the sample map with all wall heights set
-to 80 px through **Map preferences**.
+to 80 px through **Map preferences**. The inspector is scrolled to the window
+controls; in preview, the player is partially hidden behind the interior wall.
 
 New walls use `interior` when that preset exists, otherwise the first available preset. Choose a different preset in the selected wall's inspector. **Delete** removes the selected wall; **Reset** restores the entire sample map, including its presets.
 
@@ -88,8 +92,8 @@ keys for keyboard resizing.
 4. Use **Delete wall** to remove the selected segment. Use **Undo** to restore it.
 
 Clear a wall's **Drawing order** in the inspector to restore automatic depth for
-that wall. Check manual ordering in Preview because it also affects overlap with
-the player. Reordering uses the arrow buttons, not drag-and-drop.
+that wall. Preview accounts for custom depths when sorting the player against
+overlapping wall footprints. Reordering uses the arrow buttons, not drag-and-drop.
 
 ## Change dimensions for the whole map
 
@@ -153,6 +157,11 @@ Click **Preview** next to Export JSON. The editing tools hide and a character ap
 
 Preview enables collision even if the imported map has `collide: false`; it does not change that exported setting. Check wall junctions, doorway gaps, window visibility, and any manual drawing-order values.
 
+Preview sorts the player relative to overlapping walls using their bottom
+footprints, including walls with custom drawing orders. This is editor-only
+behavior. Your game must implement its own character sorting when using explicit
+wall depths; JSON export contains wall data, not the preview's player logic.
+
 Collisions use the wall body's bottom footprint, shifted south by its effective
 face height, rather than the full raised face. Use matching face heights for
 segments around an aligned doorway. See [collision geometry](how-it-works.md#collision)
@@ -192,4 +201,9 @@ class Office extends Phaser.Scene {
 }
 ```
 
-The Phaser loader finishes the queued images before `create` runs. The library ignores the editor's `textures` field; its preset texture keys resolve against Phaser's Texture Manager. Your character still needs a collider and `setDepth(player.y)` each frame; see the [quick start](quickstart.md#4-add-a-character).
+The Phaser loader finishes the queued images before `create` runs. The library
+ignores the editor's `textures` field; its preset texture keys resolve against
+Phaser's Texture Manager. Your character still needs a collider and, with
+automatic wall depths, `setDepth(player.y)` each frame. Custom depths need
+additional character sorting; see the [depth convention](api.md#depth-convention)
+and [quick start](quickstart.md#4-add-a-character).

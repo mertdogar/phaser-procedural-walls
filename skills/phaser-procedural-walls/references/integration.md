@@ -44,7 +44,9 @@ player.setOrigin(0.5, 1);
 if (wallMap.bodies) this.physics.add.collider(player, wallMap.bodies);
 ```
 
-Set `player.setDepth(player.y)` in `update()`. Use a small physics body around
+With automatic wall depths, set `player.setDepth(player.y)` in `update()`.
+Explicit wall depths require additional character sorting; Wallcraft's preview
+logic is not exported with the map. Use a small physics body around
 the character's feet, sized and offset for the actual sprite dimensions;
 don't copy offsets from an unrelated spritesheet. Normalize diagonal movement
 when implementing arrow-key movement. The library doesn't move players.
