@@ -39,6 +39,8 @@ const wallMap: WallMap = this.add.wallMap(config);
 | --- | --- | --- | --- |
 | `x1`, `y1`, `x2`, `y2` | `number` | yes | Centerline endpoints in world units. Either `x1 === x2` or `y1 === y2`; diagonal walls throw. Endpoint order does not matter. |
 | `thickness` | `number` | yes | Wall body thickness across the centerline. |
+| `height` | `number` | no | Height of this wall's face below the body. Overrides the preset's `lipHeight`. |
+| `depth` | `number` | no | Explicit Phaser drawing depth for this wall. Defaults to the wall's south edge. Higher values draw later. |
 | `preset` | `string` | yes | Key into `presets`. Unknown keys throw. |
 | `windows` | `WindowSpec[]` | no | Windows along this wall. |
 
@@ -104,7 +106,7 @@ Normalizes each wall, computes endpoint extensions, and produces every rectangle
 | `windows` | `Rect[]` | Glass rectangles. |
 | `sills` | `Rect[]` | Sill rectangles, face windows only. |
 | `collider` | `Rect` | Static body rectangle. See [How it works](how-it-works.md#collision). |
-| `depth` | `number` | South edge in world y, used as the Container depth. |
+| `depth` | `number` | Effective Container depth: the wall override when present, otherwise its south edge. |
 
 ### cutRects(rect, holes, horizontal): Rect[]
 

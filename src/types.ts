@@ -24,6 +24,8 @@ export interface WallSpec {
   x2: number;
   y2: number;
   thickness: number;
+  height?: number;
+  depth?: number;
   preset: string;
   windows?: WindowSpec[];
 }

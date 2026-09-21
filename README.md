@@ -70,7 +70,7 @@ player.setDepth(player.y);
 
 ```bash
 pnpm install
-pnpm dev     # demo: full floorplan, arrow keys move the player
+pnpm dev     # wall editor prototype: draw walls and import/export WallMapConfig JSON
 pnpm test    # geometry unit tests
 pnpm build   # library build to dist/
 ```

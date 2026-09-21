@@ -71,7 +71,7 @@ export function resolveWalls(
   return normalized.map((w) => {
     const preset = presets[w.preset];
     if (!preset) throw new Error(`Unknown wall preset "${w.preset}"`);
-    const lipHeight = preset.lipHeight ?? DEFAULTS.lipHeight;
+    const lipHeight = w.height ?? preset.lipHeight ?? DEFAULTS.lipHeight;
     const inset = preset.windowInset ?? DEFAULTS.windowInset;
     const sillHeight = preset.sillHeight ?? DEFAULTS.sillHeight;
     const t = w.thickness;
@@ -107,6 +107,6 @@ export function resolveWalls(
     const collider: Rect = horizontal
       ? { x: body.x, y: south - PLANE_THICKNESS, w: body.w, h: PLANE_THICKNESS }
       : { x: body.x, y: body.y, w: body.w, h: south - body.y };
-    return { spec: w, horizontal, body, lip, bodyPieces, lipPieces, windows, sills, collider, depth: south };
+    return { spec: w, horizontal, body, lip, bodyPieces, lipPieces, windows, sills, collider, depth: w.depth ?? south };
   });
 }

@@ -14,11 +14,11 @@ Only axis-aligned walls are supported. That keeps every shape a rectangle, which
 
 You author endpoints on the centerline, so two walls meeting at a corner would leave a notch the size of half a thickness. The plugin fixes this by extension: for each endpoint of a wall, it looks for any other wall whose centerline passes through that point, including its interior. If it finds one, the endpoint is pushed outward by half of that wall's thickness.
 
-At an L corner both walls extend and overlap. At a T-junction only the stem extends, into the bar. Since bodies are drawn before strokes within each wall, and each wall is its own object, you will see one wall's outline cross the other at a junction. That seam was accepted in exchange for per-wall depth sorting, described next.
+At an L corner both walls extend and overlap. At a T-junction only the stem extends, into the bar. Since bodies are drawn before strokes within each wall, and each wall is its own object, you may see one wall's outline cross the other at a junction. Set that wall's optional `depth` to change which segment draws last.
 
 ## Depth sorting
 
-Each wall is a separate Container with `depth` set to its **south edge**, the bottom of the lip. Characters set `depth` to their feet y. That single rule produces the two cases you expect:
+Each wall is a separate Container with `depth` set to its **south edge**, the bottom of the lip, unless the wall provides an explicit `depth` override. Characters set `depth` to their feet y. The automatic rule produces the two cases you expect:
 
 ![Player in front of the wall](images/player-in-front.jpg)
 

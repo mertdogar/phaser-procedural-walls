@@ -41,6 +41,12 @@ describe("resolveWalls", () => {
     expect(flat.sills).toEqual([]);
   });
 
+  it("lets a wall override its preset height", () => {
+    const [resolved] = resolveWalls([wall(0, 0, 100, 0, { height: 30 })], presets);
+    expect(resolved.lip).toEqual({ x: 0, y: 10, w: 100, h: 30 });
+    expect(resolved.depth).toBe(40);
+  });
+
   it("cutRects leaves holes for windows", () => {
     const pieces = cutRects({ x: 0, y: 0, w: 100, h: 20 }, [{ x: 10, y: 5, w: 20, h: 10 }, { x: 60, y: 5, w: 20, h: 10 }], true);
     expect(pieces).toEqual([
@@ -58,6 +64,12 @@ describe("resolveWalls", () => {
     expect(h.depth).toBe(20);
     expect(v.depth).toBe(100);
     expect(v.lip).toBeNull();
+  });
+
+  it("allows a wall to override its automatic drawing depth", () => {
+    const [resolved] = resolveWalls([wall(0, 0, 100, 0, { depth: 250 })], presets);
+    expect(resolved.depth).toBe(250);
+    expect(resolved.collider.y).toBe(12);
   });
 
   it("horizontal walls collide on a plane at the lip bottom, vertical walls on the full rect", () => {
