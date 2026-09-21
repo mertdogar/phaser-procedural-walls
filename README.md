@@ -97,20 +97,24 @@ The repository includes a portable
 agents. It covers library integration, Wallcraft exports, presets, textures,
 depth sorting, and collisions, with self-contained references.
 
-Copy the entire `skills/phaser-procedural-walls` folder, including `references`,
-into your agent's skill directory. For a project-local Codex installation, run
-this from the consuming project's root, replacing the source path with your
-clone location:
+Install it from your project's root with the [skills CLI](https://skills.sh/docs):
 
 ```bash
-mkdir -p .agents/skills
-cp -R /path/to/phaser-procedural-walls/skills/phaser-procedural-walls .agents/skills/
+npx skills add mertdogar/phaser-procedural-walls --skill phaser-procedural-walls
+```
+
+Append `--agent codex` to target Codex, or `--global` to install for your user
+instead of the current project. The installation includes the bundled references.
+
+To check available skills without installing:
+
+```bash
+npx skills add mertdogar/phaser-procedural-walls --list
 ```
 
 Start a new agent session if needed, then ask, for example:
 “Use the phaser-procedural-walls skill to load my Wallcraft export into a Phaser
-scene with player collisions.” Other agents can use the same folder in their
-supported skill directory. The skill is distributed in Git, not in the npm
+scene with player collisions.” The skill is distributed in Git, not in the npm
 package. Its bundled references describe version 0.2.0.
 
 ## Develop
