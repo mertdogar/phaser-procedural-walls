@@ -32,9 +32,13 @@ Vertical walls use the same rule with their bottom end as the south edge. A char
 
 A single Container for the whole map cannot do this, since one depth value cannot be both above and below the player. That is why the plugin returns a handle over many containers instead of one Game Object.
 
+Wallcraft's **Drawing order** field sets the wall's absolute `depth`. Higher values draw later, including relative to characters. This can fix an overlapping junction, but an extreme value can also keep a wall in front of a character who should appear in front of it. Leave the field blank to restore automatic sorting and check overrides in Preview. Changing depth does not move the collider.
+
 ## Collision
 
 When `collide` is on, horizontal walls get a static body that is only 8 px tall, placed along the bottom of the lip. Vertical walls get their full rectangle.
+
+A wall's `height` overrides its preset's `lipHeight`. Increasing it extends the visible face south and moves the horizontal collision plane with it; vertical colliders also extend to the new south edge. Height is therefore different from a drawing-order override.
 
 The thin plane is deliberate. From outside, a character pushing north stops at the bottom of the face and is drawn in front of it. From inside, a character walking south passes over the wall top, is hidden by the wall, and stops at the same plane. Both characters end up at the same world y with the same depth rule and the correct draw order. A full-height collider would stop the inside character at the wall top, and the character would never be behind anything.
 
@@ -54,7 +58,11 @@ A preset may name a `texture` for the body and a `lipTexture` for the face. Text
 
 ![Meeting room with stone walls](images/presets-stone.jpg)
 
-The demo generates its brick, stone, plank, plaster, and panel textures on a canvas at startup. Any loaded image works the same way as long as it tiles.
+The older scene examples above illustrate tiled materials. Wallcraft now lets you upload body and front-face images in the preset manager. It stores images as data URLs in the editor's `textures` collection and loads them into Phaser before rebuilding the walls. The library itself still expects already-loaded texture keys.
+
+![Wallcraft map with tiled body and front-face textures](images/wallcraft-textures.png)
+
+Preset edits affect every wall that references that preset. Renaming a preset updates those references. A wall's individual height override takes precedence over the preset height. The editor keeps changes in memory; JSON export is how you retain and transfer them.
 
 ## What the plugin does not do
 

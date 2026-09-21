@@ -1,10 +1,16 @@
 # API reference
 
-All exports come from the package root:
+The renderer and types are available from the package root:
 
 ```ts
 import { WallMapPlugin, WallMap, resolveWalls, cutRects } from "@mertdogar/phaser-procedural-walls";
 import type { WallMapConfig, WallSpec, WallPreset, WindowSpec, ResolvedWall, Rect } from "@mertdogar/phaser-procedural-walls";
+```
+
+For server-side geometry without importing Phaser, use the dedicated entry point:
+
+```ts
+import { resolveWalls, cutRects } from "@mertdogar/phaser-procedural-walls/geometry";
 ```
 
 ## WallMapPlugin
@@ -32,6 +38,12 @@ const wallMap: WallMap = this.add.wallMap(config);
 | `presets` | `Record<string, WallPreset>` | yes | Named styles referenced by walls. |
 | `walls` | `WallSpec[]` | yes | The wall segments. |
 | `collide` | `boolean` | no | When true, creates Arcade static bodies. Requires Arcade Physics on the scene. Default `false`. |
+
+### Wallcraft export extension
+
+The editor exports the same fields plus an optional `textures: Record<string, string>`. Each key is referenced by a preset's `texture` or `lipTexture`; each value is an embedded PNG, JPEG, or WebP data URL. This field belongs to the editor format, not the library's `WallMapConfig` type. The library does not load these images automatically. Load them into Phaser before creating the wall map, as shown in the [Wallcraft guide](wallcraft.md#load-an-exported-map-in-phaser).
+
+The upload control accepts files up to 5 MB each. Images repeat at their original size; the editor has no tile scaling or spritesheet-frame controls. Removing a texture assignment switches that surface to its color, but the uploaded image remains in the map's image collection and export.
 
 ### WallSpec
 
@@ -77,7 +89,7 @@ The handle returned by the factory. It is not itself a Game Object; it owns one 
 | member | type | description |
 | --- | --- | --- |
 | `scene` | `Phaser.Scene` | Owning scene. |
-| `containers` | `Phaser.GameObjects.Container[]` | One per wall, in input order. Each has `depth` set to the wall's south edge. |
+| `containers` | `Phaser.GameObjects.Container[]` | One per wall, in input order. Depth is the wall's explicit `depth`, or its south edge when unset. |
 | `bodies` | `Phaser.Physics.Arcade.StaticGroup \| null` | Static bodies when `collide` was true, otherwise `null`. Pass to `physics.add.collider`. |
 | `setWalls(walls)` | `(walls: WallSpec[]) => this` | Replaces the wall list and rebuilds everything. |
 | `redraw()` | `() => this` | Rebuilds with the current config. Call after changing texture contents. |
@@ -100,7 +112,7 @@ Normalizes each wall, computes endpoint extensions, and produces every rectangle
 | `spec` | `WallSpec` | The normalized input, with `x1 <= x2` and `y1 <= y2`. |
 | `horizontal` | `boolean` | `true` when `y1 === y2`. |
 | `body` | `Rect` | Wall top including endpoint extensions. |
-| `lip` | `Rect \| null` | Face below the body, `null` when `lipHeight` is `0`. |
+| `lip` | `Rect \| null` | Face below the body, `null` when the effective height (`height` override or preset `lipHeight`) is zero or negative. |
 | `bodyPieces` | `Rect[]` | Body with window holes cut out. |
 | `lipPieces` | `Rect[]` | Face with window holes cut out. |
 | `windows` | `Rect[]` | Glass rectangles. |

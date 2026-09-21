@@ -2,9 +2,7 @@
 
 In this tutorial you will create a Phaser 4 project, register the plugin, draw a single room with two windows, and walk a character around it. It takes about ten minutes.
 
-You will end up with this:
-
-![Player standing in front of a brick wall](images/player-in-front.jpg)
+You will end up with a solid-color room and a simple generated character. For a visual editing workflow instead, use the [Wallcraft guide](wallcraft.md).
 
 ## Before you begin
 
@@ -103,6 +101,7 @@ create() {
   g.fillStyle(0xe8a35c).fillRect(0, 0, 24, 24);
   g.fillStyle(0x2a2a3a).fillRect(4, 24, 16, 16);
   g.generateTexture("player", 24, 40);
+  g.destroy();
 
   this.player = this.physics.add.sprite(400, 300, "player").setOrigin(0.5, 1);
   this.player.body!.setSize(20, 12).setOffset(2, 28);
@@ -126,7 +125,8 @@ Replace `update`:
 update() {
   const vx = (this.cursors.right.isDown ? 1 : 0) - (this.cursors.left.isDown ? 1 : 0);
   const vy = (this.cursors.down.isDown ? 1 : 0) - (this.cursors.up.isDown ? 1 : 0);
-  this.player.setVelocity(vx * 200, vy * 200);
+  const velocity = new Phaser.Math.Vector2(vx, vy).normalize().scale(200);
+  this.player.setVelocity(velocity.x, velocity.y);
   this.player.setDepth(this.player.y);
 }
 ```
@@ -139,10 +139,10 @@ Walk down toward the south wall. The character keeps going into the wall zone an
 
 ![Player visible through the window](images/player-behind-window.jpg)
 
-Walk out through the top, around the outside, and push up against the south wall from below. Now the character stops at the face and is drawn in front of it.
+The room is closed, so you cannot walk through its walls or windows. To compare the outside view, temporarily change the player spawn to `(400, 570)`, save, then push up against the south wall. The character stops at the face and is drawn in front of it. To create a doorway, split a wall into two segments with a gap.
 
 ## Where to go next
 
 - Give the room a second preset with a texture: see `texture` and `lipTexture` in the [API reference](api.md).
 - Read [How it works](how-it-works.md) to understand the collision plane and why depth is the south edge.
-- The repository's `demo/` folder renders a full house with four presets and door gaps between rooms.
+- Open the repository's [Wallcraft editor](wallcraft.md) to design a map interactively and export it as JSON.

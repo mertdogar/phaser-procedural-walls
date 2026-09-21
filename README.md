@@ -2,7 +2,7 @@
 
 A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of data. You describe wall centerlines and window positions; the plugin draws thick wall bodies, a front face, see-through windows with sills, and optional Arcade Physics colliders, and it depth-sorts each wall so characters walk in front of and behind walls correctly.
 
-![Full floorplan rendered by the demo](docs/images/overview.jpg)
+![Wallcraft editor with a selected wall and geometry inspector](docs/images/wallcraft-editor.png)
 
 ## Features
 
@@ -12,6 +12,21 @@ A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of 
 - One depth-sorted Container per wall, so `sprite.setDepth(sprite.y)` is all a character needs
 - Optional Arcade static bodies: a thin plane under horizontal walls, a full rectangle for vertical ones
 - Pure geometry module with unit tests, no Phaser needed to test it
+- Wallcraft editor prototype: draw walls, drag endpoints and windows, edit height and drawing order, and manage presets
+- Upload tiled textures, export/import maps with embedded images, and test collisions in a playable preview
+
+## Try Wallcraft
+
+From a checkout of this repository:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Open the URL Vite prints. Draw a wall, switch to Select to edit it, or open **Presets** to change shared styles. **Preview** adds a character controlled with the arrow keys.
+
+Wallcraft is an in-memory prototype in `demo/`, not part of the published library. Export your JSON before closing or reloading the page. See the [Wallcraft guide](docs/wallcraft.md) for editing, textures, and loading an exported map in a game.
 
 ## Install
 
@@ -63,6 +78,7 @@ player.setDepth(player.y);
 ## Documentation
 
 - [Quick start](docs/quickstart.md). Build a walkable room with a window from an empty folder.
+- [Wallcraft guide](docs/wallcraft.md). Edit maps, manage presets and textures, test collisions, and export to Phaser.
 - [API reference](docs/api.md). Every config field, preset option, and method.
 - [How it works](docs/how-it-works.md). Corner filling, depth sorting, the collision plane, and window holes.
 
@@ -72,6 +88,8 @@ player.setDepth(player.y);
 pnpm install
 pnpm dev     # wall editor prototype: draw walls and import/export WallMapConfig JSON
 pnpm test    # geometry unit tests
+pnpm typecheck
+pnpm lint
 pnpm build   # library build to dist/
 ```
 
