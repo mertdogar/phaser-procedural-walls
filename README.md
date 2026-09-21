@@ -128,6 +128,33 @@ scene with player collisions.” The skill is distributed in Git, not in the npm
 package. Its bundled references track the repository, including changes made
 after the original 0.2.0 release.
 
+## 0.3.0 release notes
+
+Version 0.3.0 is prepared for release but has not been published as part of this
+update. It adds large-map navigation, resizable layers and inspector panels,
+bulk height and thickness settings, window-width controls, and a Help dialog.
+Select and Draw now live in the top bar. Preview handles player occlusion with
+custom wall drawing orders. Documentation, screenshots, and the repository's
+installable agent skill have also been updated.
+
+### Upgrade from 0.2.0
+
+Review existing maps before upgrading your game:
+
+- **Collision footprints changed.** Colliders now match the wall body's bottom
+  footprint, shifted south by its effective face height. Recheck spawn points,
+  wall junctions, and doorways. Use matching face heights around aligned gaps.
+- **Default window sills changed.** When `sillHeight` is omitted, it follows wall
+  thickness, clipped to the opening height. Explicit values remain unchanged;
+  set a value to preserve an older look, or use zero to disable sills.
+- **Preview sorting is editor-only.** Exported custom `depth` values remain
+  absolute drawing orders. Consumer games still need character sorting that
+  accounts for these values; `setDepth(player.y)` assumes automatic wall depths.
+
+After publication, launch this specific version with
+`npx @mertdogar/phaser-procedural-walls@0.3.0 editor` or
+`pnpx @mertdogar/phaser-procedural-walls@0.3.0 editor`.
+
 ## Develop
 
 ```bash
