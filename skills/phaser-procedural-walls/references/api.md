@@ -103,8 +103,9 @@ Each result has `spec`, `horizontal`, `body`, `lip`, `bodyPieces`, `lipPieces`,
 
 The south edge is `body.y + body.h + (lip?.h ?? 0)`:
 
-- Horizontal colliders span the body width and the last 8px before that edge.
-- Vertical colliders span the entire body and face height.
+- Colliders match the body rectangle shifted south by the effective face height.
+- Both orientations preserve footprint dimensions; the raised face adds no
+  collision area. Equal-height segments preserve doorway gaps at floor level.
 - Default depth is the south edge. `wall.depth` overrides only draw order;
   larger depths draw later. Height changes geometry and colliders as well.
 

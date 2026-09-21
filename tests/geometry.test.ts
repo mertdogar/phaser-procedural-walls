@@ -81,12 +81,30 @@ describe("resolveWalls", () => {
   it("allows a wall to override its automatic drawing depth", () => {
     const [resolved] = resolveWalls([wall(0, 0, 100, 0, { depth: 250 })], presets);
     expect(resolved.depth).toBe(250);
-    expect(resolved.collider.y).toBe(12);
+    expect(resolved.collider.y).toBe(0);
   });
 
-  it("horizontal walls collide on a plane at the lip bottom, vertical walls on the full rect", () => {
+  it("projects both wall footprints to the bottom of the face", () => {
     const [h, v] = resolveWalls([wall(0, 0, 100, 0), wall(0, 0, 0, 100)], presets);
-    expect(h.collider).toEqual({ x: -10, y: 12, w: 110, h: 8 });
-    expect(v.collider).toEqual({ x: -10, y: -10, w: 20, h: 120 });
+    expect(h.collider).toEqual({ x: -10, y: 0, w: 110, h: 20 });
+    expect(v.collider).toEqual({ x: -10, y: 0, w: 20, h: 110 });
+  });
+
+  it.each([0, 24, 80, 160])("preserves a vertical doorway when face height is %s", (height) => {
+    const [upper, lower] = resolveWalls([
+      wall(448, 96, 448, 320, { height }),
+      wall(448, 544, 448, 416, { height }),
+    ], presets);
+    expect(upper.collider).toEqual({ x: 438, y: 96 + height, w: 20, h: 224 });
+    expect(lower.collider).toEqual({ x: 438, y: 416 + height, w: 20, h: 128 });
+    expect(lower.collider.y - (upper.collider.y + upper.collider.h)).toBe(96);
+    const feet = { y: 368 + height - 8, h: 8 };
+    expect(feet.y).toBeGreaterThan(upper.collider.y + upper.collider.h);
+    expect(feet.y + feet.h).toBeLessThan(lower.collider.y);
+  });
+
+  it.each([8, 20, 40])("keeps horizontal footprint thickness %s independent of face height", (thickness) => {
+    const [resolved] = resolveWalls([wall(0, 0, 100, 0, { height: 80, thickness })], presets);
+    expect(resolved.collider).toEqual({ x: 0, y: 80 - thickness / 2, w: 100, h: thickness });
   });
 });

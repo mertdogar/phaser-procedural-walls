@@ -1,7 +1,6 @@
 import type { Rect, ResolvedWall, WallPreset, WallSpec } from "./types";
 
 const DEFAULTS = { edgeWidth: 2, lipHeight: 0, windowInset: 0.6 };
-const PLANE_THICKNESS = 8;
 
 function normalize(w: WallSpec): WallSpec {
   if (w.x1 !== w.x2 && w.y1 !== w.y2) {
@@ -104,9 +103,7 @@ export function resolveWalls(
     const lipPieces = lip ? cutRects(lip, windowsInLip ? windows : [], true) : [];
 
     const south = body.y + body.h + (lip ? lip.h : 0);
-    const collider: Rect = horizontal
-      ? { x: body.x, y: south - PLANE_THICKNESS, w: body.w, h: PLANE_THICKNESS }
-      : { x: body.x, y: body.y, w: body.w, h: south - body.y };
+    const collider: Rect = { ...body, y: body.y + (lip ? lip.h : 0) };
     return { spec: w, horizontal, body, lip, bodyPieces, lipPieces, windows, sills, collider, depth: w.depth ?? south };
   });
 }

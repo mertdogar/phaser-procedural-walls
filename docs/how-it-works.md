@@ -36,11 +36,20 @@ Wallcraft's **Drawing order** field sets the wall's absolute `depth`. Higher val
 
 ## Collision
 
-When `collide` is on, horizontal walls get a static body that is only 8 px tall, placed along the bottom of the lip. Vertical walls get their full rectangle.
+When `collide` is on, each wall gets a static body matching its bottom
+footprint: the wall body rectangle shifted south by its face height. Horizontal
+footprints retain the wall thickness; vertical footprints retain the wall length
+and thickness, including junction extensions. The raised face is not solid space.
 
-A wall's `height` overrides its preset's `lipHeight`. Increasing it extends the visible face south and moves the horizontal collision plane with it; vertical colliders also extend to the new south edge. Height is therefore different from a drawing-order override.
+A wall's `height` overrides its preset's `lipHeight`. Increasing it extends the
+visible face south and shifts the footprint south without enlarging it. With no
+face, the collider matches the body. Height is therefore different from a
+drawing-order override.
 
-The thin plane is deliberate. From outside, a character pushing north stops at the bottom of the face and is drawn in front of it. From inside, a character walking south passes over the wall top, is hidden by the wall, and stops at the same plane. Both characters end up at the same world y with the same depth rule and the correct draw order. A full-height collider would stop the inside character at the wall top, and the character would never be behind anything.
+Characters collide at floor level rather than against the full visible face.
+This lets a character pass behind a raised wall and keeps doorway gaps between
+vertical segments open at their projected floor positions. Segments with different
+face heights have different floor offsets; use matching heights for aligned gaps.
 
 The `collider` rectangle is computed in the geometry module, so you can read it from `resolveWalls` if you use a physics engine other than Arcade.
 
