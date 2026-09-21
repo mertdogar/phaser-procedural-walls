@@ -90,6 +90,29 @@ player.setDepth(player.y);
 - [API reference](docs/api.md). Every config field, preset option, and method.
 - [How it works](docs/how-it-works.md). Corner filling, depth sorting, the collision plane, and window holes.
 
+## Agent skill
+
+The repository includes a portable
+[procedural-walls skill](skills/phaser-procedural-walls/SKILL.md) for coding
+agents. It covers library integration, Wallcraft exports, presets, textures,
+depth sorting, and collisions, with self-contained references.
+
+Copy the entire `skills/phaser-procedural-walls` folder, including `references`,
+into your agent's skill directory. For a project-local Codex installation, run
+this from the consuming project's root, replacing the source path with your
+clone location:
+
+```bash
+mkdir -p .agents/skills
+cp -R /path/to/phaser-procedural-walls/skills/phaser-procedural-walls .agents/skills/
+```
+
+Start a new agent session if needed, then ask, for example:
+“Use the phaser-procedural-walls skill to load my Wallcraft export into a Phaser
+scene with player collisions.” Other agents can use the same folder in their
+supported skill directory. The skill is distributed in Git, not in the npm
+package. Its bundled references describe version 0.2.0.
+
 ## Develop
 
 ```bash

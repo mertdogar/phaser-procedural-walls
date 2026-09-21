@@ -1,0 +1,38 @@
+{
+  "skill_name": "phaser-procedural-walls",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I exported a Wallcraft map with uploaded body and face images. Show how to load /office.json into my Phaser 4 scene, render it, and connect collisions to my existing player. Do I need to do anything with the textures dictionary? Give a concise TypeScript integration, not a new app.",
+      "expected_output": "Loads embedded images before constructing the map, distinguishes the editor extension from WallMapConfig, registers the plugin, enables Arcade and map collisions, and connects the existing player.",
+      "files": [],
+      "expectations": [
+        "Explicitly loads each embedded texture key and data URL before wallMap construction.",
+        "Distinguishes textures as an editor extension rather than a native WallMapConfig field.",
+        "Covers plugin registration, Arcade Physics, collide true, and a collider for the existing player."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "My game uses @mertdogar/phaser-procedural-walls. After wallMap.setWalls(nextWalls), the player stops colliding. Also the front wall covers an interior wall incorrectly. Should I change height to fix ordering? Explain the smallest fix and show the relevant code.",
+      "expected_output": "Reconnects the player collider to the replaced static group and uses depth, not height, to adjust drawing order.",
+      "files": [],
+      "expectations": [
+        "Explains that setWalls destroys and replaces the static group.",
+        "Destroys the old collider and attaches a new one to wallMap.bodies after rebuilding.",
+        "Uses wall depth for ordering and explains that height changes geometry and collision placement."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I need to calculate this library's collision rectangles in a Node server without Phaser or DOM globals. A wall runs from (400,100) to (0,100), thickness 20, height 40, preset stone, with a window offset 60 width 80. Show the correct import and resulting window x, collider, and default depth. Can players walk through the window?",
+      "expected_output": "Uses the geometry subpath; computes window x 260, collider x0 y142 w400 h8, depth150, and clarifies windows remain solid.",
+      "files": [],
+      "expectations": [
+        "Imports resolveWalls from @mertdogar/phaser-procedural-walls/geometry, not the package root.",
+        "Computes window x 260, collider {x:0,y:142,w:400,h:8}, and depth 150.",
+        "Explains that windows are not passable and a doorway requires a gap between wall segments."
+      ]
+    }
+  ]
+}

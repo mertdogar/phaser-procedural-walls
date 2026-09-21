@@ -3,7 +3,7 @@
 The renderer and types are available from the package root:
 
 ```ts
-import { WallMapPlugin, WallMap, resolveWalls, cutRects } from "@mertdogar/phaser-procedural-walls";
+import { WallMapPlugin, WallMap, resolveWalls } from "@mertdogar/phaser-procedural-walls";
 import type { WallMapConfig, WallSpec, WallPreset, WindowSpec, ResolvedWall, Rect } from "@mertdogar/phaser-procedural-walls";
 ```
 
