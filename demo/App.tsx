@@ -2,6 +2,7 @@ import {
   BrickWallIcon,
   DownloadIcon,
   FileUpIcon,
+  HandIcon,
   MousePointer2Icon,
   PlayIcon,
   PlusIcon,
@@ -24,6 +25,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -173,6 +175,7 @@ export default function App() {
     onExport: exportJson,
     onPreviewToggle: togglePreview,
     onPresets: () => setPresetsOpen(true),
+    onSetAllDimensions: (patch) => commitConfig({ ...config, walls: config.walls.map((wall) => ({ ...wall, ...patch })) }),
   };
 
   return (
@@ -218,6 +221,7 @@ interface EditorProps {
   onExport: () => void;
   onPreviewToggle: () => void;
   onPresets: () => void;
+  onSetAllDimensions: (patch: Partial<Pick<WallSpec, "height" | "thickness">>) => void;
 }
 
 function Editor(props: EditorProps) {
@@ -248,7 +252,7 @@ function Editor(props: EditorProps) {
           </>
         )}
         <div className="absolute bottom-7 left-1/2 -translate-x-1/2 rounded-full border bg-background px-4 py-2 text-xs text-muted-foreground shadow-sm">
-          {props.preview ? "Arrow keys to move · wall collisions enabled" : "32 px grid · drag to draw · click to select"}
+          {props.preview ? "Arrow keys to move · wall collisions enabled" : "32 px snap · scroll to zoom · hand tool to pan"}
         </div>
       </main>
     </div>
@@ -269,6 +273,7 @@ function TopBar(props: EditorProps) {
         <TooltipButton label="Undo" onClick={props.onUndo} disabled={!props.historyCount}><Undo2Icon /></TooltipButton>
         <TooltipButton label="Redo" onClick={props.onRedo} disabled={!props.futureCount}><Redo2Icon /></TooltipButton>
         <Separator orientation="vertical" className="mx-1 h-6" />
+        <MapPreferences config={props.config} disabled={props.preview} onApply={props.onSetAllDimensions} />
         <Button variant="outline" size="sm" onClick={props.onPresets} disabled={props.preview}>Presets</Button>
         <FileActions
           preview={props.preview}
@@ -278,6 +283,53 @@ function TopBar(props: EditorProps) {
         />
       </div>
     </header>
+  );
+}
+
+function MapPreferences({ config, disabled, onApply }: {
+  config: WallMapConfig;
+  disabled: boolean;
+  onApply: EditorProps["onSetAllDimensions"];
+}) {
+  const [height, setHeight] = useState("");
+  const [thickness, setThickness] = useState("");
+  const [status, setStatus] = useState("");
+  const count = config.walls.length;
+  const apply = (field: "height" | "thickness", value: string) => {
+    const number = Number(value);
+    if (!count || !value.trim() || !Number.isFinite(number) || (field === "height" ? number < 0 : number <= 0)) return;
+    onApply({ [field]: number });
+    setStatus(`Set ${field} to ${number} px for ${count} walls. Use Undo to restore the previous values.`);
+  };
+  return (
+    <Dialog onOpenChange={() => { setHeight(""); setThickness(""); setStatus(""); }}>
+      <DialogTrigger asChild><Button variant="outline" size="sm" disabled={disabled}>Map preferences</Button></DialogTrigger>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Map preferences</DialogTitle>
+          <DialogDescription>Bulk updates affect all {count} existing walls. Each action can be undone. Presets and future walls stay unchanged.</DialogDescription>
+        </DialogHeader>
+        <FieldGroup>
+          {([
+            { key: "height", label: "Wall height", value: height, setValue: setHeight, min: 0, description: "Replaces individual height overrides. Zero removes the visible wall face." },
+            { key: "thickness", label: "Wall thickness", value: thickness, setValue: setThickness, min: 1, description: "Changes the body width of every wall. Must be greater than zero." },
+          ] as const).map(({ key, label, value, setValue, min, description }) => {
+            const values = new Set(config.walls.map((wall) => key === "height" ? wall.height ?? config.presets[wall.preset]?.lipHeight ?? 0 : wall.thickness));
+            const current = values.size === 1 ? `${[...values][0]} px` : count ? "Mixed" : "No walls";
+            const valid = Boolean(count && value.trim() && Number.isFinite(Number(value)) && (key === "height" ? Number(value) >= 0 : Number(value) > 0));
+            return <Field key={key}>
+              <FieldLabel htmlFor={`map-${key}`}>{label} (px)</FieldLabel>
+              <div className="flex items-center gap-2">
+                <Input id={`map-${key}`} type="number" min={min} step="any" placeholder={current} value={value} onChange={(event) => setValue(event.target.value)} />
+                <Button disabled={!valid} onClick={() => apply(key, value)} aria-label={`Apply ${key} to all walls`}>Apply to all</Button>
+              </div>
+              <FieldDescription>{description} Current: {current}.</FieldDescription>
+            </Field>;
+          })}
+        </FieldGroup>
+        <p role="status" className="text-sm text-muted-foreground">{status}</p>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -311,6 +363,7 @@ function ToolPicker({ tool, onChange, vertical = false }: { tool: EditorTool; on
     >
       <ToggleGroupItem value="select" aria-label="Select walls"><MousePointer2Icon />{!vertical && "Select"}</ToggleGroupItem>
       <ToggleGroupItem value="wall" aria-label="Draw walls"><BrickWallIcon />{!vertical && "Draw wall"}</ToggleGroupItem>
+      <ToggleGroupItem value="pan" aria-label="Pan map"><HandIcon />{!vertical && "Pan"}</ToggleGroupItem>
     </ToggleGroup>
   );
 }
@@ -620,16 +673,16 @@ function ImportDialog({ open, value, error, onOpenChange, onValueChange, onApply
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import wall JSON</DialogTitle>
           <DialogDescription>Load a WallMapConfig file or paste its contents below.</DialogDescription>
         </DialogHeader>
         <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(event) => readFile(event.target.files?.[0])} />
         <Button variant="outline" onClick={() => fileRef.current?.click()}><FileUpIcon data-icon="inline-start" />Choose JSON file</Button>
-        <Field data-invalid={Boolean(error)}>
+        <Field className="min-h-0 overflow-y-auto" data-invalid={Boolean(error)}>
           <FieldLabel htmlFor="import-json">JSON source</FieldLabel>
-          <Textarea id="import-json" className="min-h-72 font-mono text-xs" aria-invalid={Boolean(error)} value={value} onChange={(event) => onValueChange(event.target.value)} spellCheck={false} />
+          <Textarea id="import-json" className="field-sizing-fixed h-72 min-h-24 shrink resize-none overflow-y-auto font-mono text-xs" aria-invalid={Boolean(error)} value={value} onChange={(event) => onValueChange(event.target.value)} spellCheck={false} />
           {error && <p className="text-sm text-destructive">{error}</p>}
         </Field>
         <DialogFooter>

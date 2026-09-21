@@ -23,6 +23,12 @@ There is no CLI JSON-input argument or headless export command.
 
 Use the editor controls to work with the same fields as the library config.
 
+In the repository editor, **Fit map** frames the floor plan. Scroll or use the
+zoom buttons, and drag with the hand tool to pan. Editing isn't limited to the
+initial viewport, and preview follows the moving player. These navigation
+controls require a release containing the large-map editor fix; the original
+0.2.0 editor has a fixed viewport.
+
 1. Draw axis-aligned walls on the 32px grid. Switch to **Select** and click a
    wall to inspect it.
 2. Drag endpoint anchors or edit coordinates. Drag windows along the wall or

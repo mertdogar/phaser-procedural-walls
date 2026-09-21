@@ -38,6 +38,13 @@ Open the local URL Vite prints. The editor starts with a sample floor plan. Chan
 
 ## Draw and edit walls
 
+Use **Fit map** to see the full floor plan. Scroll over the canvas or use the
+**−** and **+** buttons to zoom. Choose the hand tool and drag to pan; a
+middle-button drag also pans. Drawing and endpoint edits snap to 32 px without
+being limited to the initial viewport. The grid shows fewer lines when zoomed
+out, but snapping stays at 32 px. Preview bounds follow the map, and the camera
+follows the player while moving.
+
 1. Choose the wall tool on the left and drag on the map. Drawing snaps to a 32 px grid and locks to a horizontal or vertical line.
 2. Choose the pointer tool and click a wall. Its endpoints and inspector appear.
 3. Drag either circular endpoint to resize the wall. The opposite endpoint stays fixed, and the segment stays axis-aligned.

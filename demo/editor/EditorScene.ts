@@ -2,9 +2,9 @@ import Phaser from "phaser";
 import { resolveWalls } from "../../src/geometry";
 import { WallMap } from "../../src/WallMap";
 import type { WallSpec, WindowSpec } from "../../src/types";
-import { GRID_SIZE, type WallMapConfig } from "../editor-data";
+import { getMapBounds, GRID_SIZE, type WallMapConfig } from "../editor-data";
 
-export type EditorTool = "select" | "wall";
+export type EditorTool = "select" | "wall" | "pan";
 
 interface EditorCallbacks {
   onAddWall: (wall: WallSpec) => void;
@@ -24,14 +24,13 @@ interface WindowDrag {
   wall: WallSpec;
 }
 
-const WORLD_WIDTH = 960;
-const WORLD_HEIGHT = 640;
-
 export class EditorScene extends Phaser.Scene {
   private configData: WallMapConfig;
   private wallMap: WallMap | null = null;
   private textureSources = new Map<string, string>();
   private overlay!: Phaser.GameObjects.Graphics;
+  private grid!: Phaser.GameObjects.Graphics;
+  private panStart: { x: number; y: number; scrollX: number; scrollY: number } | null = null;
   private tool: EditorTool = "wall";
   private selectedIndex: number | null = null;
   private drawStart: Phaser.Math.Vector2 | null = null;
@@ -55,12 +54,19 @@ export class EditorScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(0xf2efe8);
+    this.grid = this.add.graphics().setDepth(-100);
+    this.fitMap();
     this.drawGrid();
     this.overlay = this.add.graphics().setDepth(10000);
     this.cursors = this.input.keyboard?.createCursorKeys() ?? null;
     this.input.on("pointerdown", this.handlePointerDown, this);
     this.input.on("pointermove", this.handlePointerMove, this);
     this.input.on("pointerup", this.handlePointerUp, this);
+    this.input.on("pointerupoutside", this.handlePointerUp, this);
+    this.input.on("wheel", (pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
+      if (this.drawStart || this.anchorDrag || this.windowDrag || this.panStart) return;
+      this.zoomBy(Math.exp(-dy * 0.001), pointer.x, pointer.y);
+    });
     this.drawOverlay();
     void this.refreshWalls();
   }
@@ -95,6 +101,12 @@ export class EditorScene extends Phaser.Scene {
         return { key, source, image };
       }));
       if (!this.sys.isActive() || config !== this.configData) return;
+      const bounds = getMapBounds(config);
+      const previous = this.physics.world.bounds;
+      const needsFit = !this.wallMap || bounds.x < previous.x || bounds.y < previous.y
+        || bounds.x + bounds.width > previous.right || bounds.y + bounds.height > previous.bottom;
+      this.physics.world.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
+      if (needsFit && this.selectedIndex === null) this.fitMap();
       this.wallMap?.destroy();
       for (const item of images) {
         if (!item) continue;
@@ -119,35 +131,74 @@ export class EditorScene extends Phaser.Scene {
     if (velocity.lengthSq() > 0) velocity.normalize().scale(150);
     this.player.setVelocity(velocity.x, velocity.y).setDepth(this.player.y);
     if (x !== 0) this.player.setFlipX(x < 0);
+    if (x !== 0 || y !== 0) {
+      this.cameras.main.centerOn(this.player.x, this.player.y);
+      this.drawGrid();
+    }
+  }
+
+  fitMap(): void {
+    const bounds = getMapBounds(this.configData);
+    const camera = this.cameras.main;
+    const availableWidth = camera.width * (this.preview ? 0.9 : 0.65);
+    camera.setZoom(Math.min(1, availableWidth / bounds.width, (camera.height - 80) / bounds.height));
+    camera.centerOn(bounds.x + bounds.width / 2 + (camera.width - availableWidth) / (2 * camera.zoom), bounds.y + bounds.height / 2);
+    this.drawGrid();
+    this.drawOverlay();
+  }
+
+  zoomBy(factor: number, x = this.cameras.main.width / 2, y = this.cameras.main.height / 2): void {
+    const camera = this.cameras.main;
+    const bounds = getMapBounds(this.configData);
+    const minZoom = Math.min(0.1, camera.width / bounds.width, camera.height / bounds.height);
+    camera.preRender();
+    const before = camera.getWorldPoint(x, y);
+    camera.setZoom(Phaser.Math.Clamp(camera.zoom * factor, minZoom, 4));
+    camera.preRender();
+    const after = camera.getWorldPoint(x, y);
+    camera.scrollX += before.x - after.x;
+    camera.scrollY += before.y - after.y;
+    this.drawGrid();
+    this.drawOverlay();
   }
 
   private drawGrid(): void {
-    const grid = this.add.graphics().setDepth(-100);
-    grid.lineStyle(1, 0xd8d4ca, 0.72);
-    for (let x = 0; x <= WORLD_WIDTH; x += GRID_SIZE) grid.lineBetween(x, 0, x, WORLD_HEIGHT);
-    for (let y = 0; y <= WORLD_HEIGHT; y += GRID_SIZE) grid.lineBetween(0, y, WORLD_WIDTH, y);
-    grid.lineStyle(2, 0xc5c0b5, 0.8).strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    if (!this.grid) return;
+    const camera = this.cameras.main;
+    camera.preRender();
+    const view = camera.worldView;
+    const step = GRID_SIZE * Math.max(1, Math.ceil(0.4 / camera.zoom));
+    this.grid.clear().lineStyle(1 / camera.zoom, 0xd8d4ca, 0.72);
+    for (let x = Math.floor(view.x / step) * step; x <= view.right; x += step) this.grid.lineBetween(x, view.y, x, view.bottom);
+    for (let y = Math.floor(view.y / step) * step; y <= view.bottom; y += step) this.grid.lineBetween(view.x, y, view.right, y);
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if ((this.tool === "pan" && !this.preview) || pointer.middleButtonDown()) {
+      const camera = this.cameras.main;
+      this.panStart = { x: pointer.x, y: pointer.y, scrollX: camera.scrollX, scrollY: camera.scrollY };
+      this.input.setDefaultCursor("grabbing");
+      return;
+    }
     if (this.preview) return;
+    pointer.updateWorldPoint(this.cameras.main);
     const point = this.snapPoint(pointer.worldX, pointer.worldY);
     if (this.tool === "select") {
-      const windowIndex = this.findWindow(pointer.worldX, pointer.worldY);
-      if (windowIndex !== null && this.selectedIndex !== null) {
-        this.windowDrag = {
-          index: this.selectedIndex,
-          windowIndex,
-          wall: { ...this.configData.walls[this.selectedIndex] },
-        };
-        this.input.setDefaultCursor("grabbing");
-        return;
-      }
       const endpoint = this.findAnchor(pointer.worldX, pointer.worldY);
       if (endpoint && this.selectedIndex !== null) {
         this.anchorDrag = {
           index: this.selectedIndex,
           endpoint,
+          wall: { ...this.configData.walls[this.selectedIndex] },
+        };
+        this.input.setDefaultCursor("grabbing");
+        return;
+      }
+      const windowIndex = this.findWindow(pointer.worldX, pointer.worldY);
+      if (windowIndex !== null && this.selectedIndex !== null) {
+        this.windowDrag = {
+          index: this.selectedIndex,
+          windowIndex,
           wall: { ...this.configData.walls[this.selectedIndex] },
         };
         this.input.setDefaultCursor("grabbing");
@@ -162,7 +213,15 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    if (this.panStart) {
+      const camera = this.cameras.main;
+      camera.scrollX = this.panStart.scrollX - (pointer.x - this.panStart.x) / camera.zoom;
+      camera.scrollY = this.panStart.scrollY - (pointer.y - this.panStart.y) / camera.zoom;
+      this.drawGrid();
+      return;
+    }
     if (this.preview) return;
+    pointer.updateWorldPoint(this.cameras.main);
     if (this.windowDrag && pointer.isDown) {
       this.windowDrag.wall = this.moveWindow(
         this.windowDrag.wall,
@@ -197,7 +256,13 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private handlePointerUp(pointer: Phaser.Input.Pointer): void {
+    if (this.panStart) {
+      this.panStart = null;
+      this.input.setDefaultCursor("default");
+      return;
+    }
     if (this.preview) return;
+    pointer.updateWorldPoint(this.cameras.main);
     if (this.windowDrag) {
       const drag = this.windowDrag;
       const wall = this.moveWindow(drag.wall, drag.windowIndex, pointer.worldX, pointer.worldY);
@@ -253,9 +318,10 @@ export class EditorScene extends Phaser.Scene {
       ?? this.anchorDrag?.wall
       ?? (this.selectedIndex === null ? null : this.configData.walls[this.selectedIndex]);
     if (wall) {
+      const radius = 8 / this.cameras.main.zoom;
       this.overlay.lineStyle(4, 0x2d7a4c, 1).lineBetween(wall.x1, wall.y1, wall.x2, wall.y2);
-      this.overlay.fillStyle(0xffffff, 1).fillCircle(wall.x1, wall.y1, 8).fillCircle(wall.x2, wall.y2, 8);
-      this.overlay.lineStyle(3, 0x2d7a4c, 1).strokeCircle(wall.x1, wall.y1, 8).strokeCircle(wall.x2, wall.y2, 8);
+      this.overlay.fillStyle(0xffffff, 1).fillCircle(wall.x1, wall.y1, radius).fillCircle(wall.x2, wall.y2, radius);
+      this.overlay.lineStyle(3 / this.cameras.main.zoom, 0x2d7a4c, 1).strokeCircle(wall.x1, wall.y1, radius).strokeCircle(wall.x2, wall.y2, radius);
       for (const [index, rect] of this.getWindowRects(wall).entries()) {
         const active = this.windowDrag?.windowIndex === index;
         this.overlay.fillStyle(active ? 0x2d7a4c : 0xffffff, active ? 0.35 : 0.75).fillRect(rect.x, rect.y, rect.w, rect.h);
@@ -279,7 +345,7 @@ export class EditorScene extends Phaser.Scene {
       const distance = wall.x1 === wall.x2
         ? Math.hypot(x - wall.x1, y - Phaser.Math.Clamp(y, Math.min(wall.y1, wall.y2), Math.max(wall.y1, wall.y2)))
         : Math.hypot(x - Phaser.Math.Clamp(x, Math.min(wall.x1, wall.x2), Math.max(wall.x1, wall.x2)), y - wall.y1);
-      if (distance <= wall.thickness / 2 + 10 && (!nearest || distance < nearest.distance)) {
+      if (distance <= wall.thickness / 2 + 10 / this.cameras.main.zoom && (!nearest || distance < nearest.distance)) {
         nearest = { index, distance };
       }
     }
@@ -292,7 +358,7 @@ export class EditorScene extends Phaser.Scene {
     if (!wall) return null;
     const startDistance = Phaser.Math.Distance.Between(x, y, wall.x1, wall.y1);
     const endDistance = Phaser.Math.Distance.Between(x, y, wall.x2, wall.y2);
-    if (Math.min(startDistance, endDistance) > 28) return null;
+    if (Math.min(startDistance, endDistance) > 16 / this.cameras.main.zoom) return null;
     return startDistance <= endDistance ? "start" : "end";
   }
 
@@ -300,7 +366,7 @@ export class EditorScene extends Phaser.Scene {
     if (this.selectedIndex === null) return null;
     const wall = this.configData.walls[this.selectedIndex];
     if (!wall) return null;
-    const padding = 10;
+    const padding = 10 / this.cameras.main.zoom;
     const index = this.getWindowRects(wall).findIndex((rect) => (
       x >= rect.x - padding
       && x <= rect.x + rect.w + padding
@@ -344,8 +410,8 @@ export class EditorScene extends Phaser.Scene {
 
   private snapPoint(x: number, y: number): Phaser.Math.Vector2 {
     return new Phaser.Math.Vector2(
-      Phaser.Math.Clamp(Math.round(x / GRID_SIZE) * GRID_SIZE, 0, WORLD_WIDTH),
-      Phaser.Math.Clamp(Math.round(y / GRID_SIZE) * GRID_SIZE, 0, WORLD_HEIGHT),
+      Math.round(x / GRID_SIZE) * GRID_SIZE,
+      Math.round(y / GRID_SIZE) * GRID_SIZE,
     );
   }
 
@@ -363,7 +429,11 @@ export class EditorScene extends Phaser.Scene {
       this.player = null;
       return;
     }
-    if (!this.player) this.player = this.createPlayer();
+    if (!this.player) {
+      this.player = this.createPlayer();
+      this.cameras.main.centerOn(this.player.x, this.player.y);
+      this.drawGrid();
+    }
     if (this.wallMap?.bodies) this.playerCollider = this.physics.add.collider(this.player, this.wallMap.bodies);
     this.game.canvas.tabIndex = 0;
     this.game.canvas.focus();
@@ -393,18 +463,21 @@ export class EditorScene extends Phaser.Scene {
 
   private findSpawn(): Phaser.Math.Vector2 {
     const colliders = resolveWalls(this.configData.walls, this.configData.presets).map((wall) => wall.collider);
-    const candidates = [
-      new Phaser.Math.Vector2(320, 384),
-      new Phaser.Math.Vector2(640, 384),
-      new Phaser.Math.Vector2(320, 224),
-      new Phaser.Math.Vector2(640, 224),
-      new Phaser.Math.Vector2(WORLD_WIDTH / 2, WORLD_HEIGHT / 2),
-    ];
-    return candidates.find((point) => colliders.every((rect) => (
+    const bounds = getMapBounds(this.configData);
+    const center = new Phaser.Math.Vector2(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    const isFree = (point: Phaser.Math.Vector2) => colliders.every((rect) => (
       point.x + 9 <= rect.x
       || point.x - 9 >= rect.x + rect.w
       || point.y <= rect.y
       || point.y - 10 >= rect.y + rect.h
-    ))) ?? candidates.at(-1)!;
+    ));
+    if (isFree(center)) return center;
+    for (let y = bounds.y + GRID_SIZE; y < bounds.y + bounds.height; y += GRID_SIZE) {
+      for (let x = bounds.x + GRID_SIZE; x < bounds.x + bounds.width; x += GRID_SIZE) {
+        const point = new Phaser.Math.Vector2(x, y);
+        if (isFree(point)) return point;
+      }
+    }
+    return center;
   }
 }

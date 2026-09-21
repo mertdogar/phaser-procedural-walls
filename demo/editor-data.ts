@@ -1,10 +1,23 @@
 import type { WallMapConfig as BaseWallMapConfig, WallSpec } from "../src/types";
+import { resolveWalls } from "../src/geometry";
 
 export interface WallMapConfig extends BaseWallMapConfig {
   textures?: Record<string, string>;
 }
 
 export const GRID_SIZE = 32;
+
+export function getMapBounds(config: WallMapConfig) {
+  const rects = resolveWalls(config.walls, config.presets).flatMap((wall) => [wall.body, ...(wall.lip ? [wall.lip] : [])]);
+  if (!rects.length) return { x: 0, y: 0, width: 960, height: 640 };
+  const left = Math.min(...rects.map((r) => r.x)) - GRID_SIZE * 2;
+  const top = Math.min(...rects.map((r) => r.y)) - GRID_SIZE * 2;
+  const right = Math.max(...rects.map((r) => r.x + r.w)) + GRID_SIZE * 2;
+  const bottom = Math.max(...rects.map((r) => r.y + r.h)) + GRID_SIZE * 2;
+  const width = Math.max(960, right - left);
+  const height = Math.max(640, bottom - top);
+  return { x: (left + right - width) / 2, y: (top + bottom - height) / 2, width, height };
+}
 
 export const initialConfig: WallMapConfig = {
   presets: {
