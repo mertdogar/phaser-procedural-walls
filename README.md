@@ -129,7 +129,7 @@ scene with player collisions.” The skill is distributed in Git, not in the npm
 package. Its bundled references track the repository, including changes made
 after the original 0.2.0 release.
 
-## Unreleased
+## 0.4.1 release notes
 
 Drag a selected wall's green centerline to move the entire segment with a
 grid-snapped preview. Endpoint resizing and window dragging remain available.

@@ -69,7 +69,7 @@ doesn't also pick furniture or move the camera. Disable the editor when another
 tool owns input. In a scene with multiple cameras, the host also controls which
 cameras render the overlay.
 
-In the current source (after 0.4.0), dragging the selected wall's green centerline
+Starting with 0.4.1, dragging the selected wall's green centerline
 moves the entire segment. Both endpoints receive the same grid-snapped delta,
 preserving length, orientation, off-grid alignment, and window offsets. Endpoint
 and window handles take priority; connected segments stay fixed. A translucent,
