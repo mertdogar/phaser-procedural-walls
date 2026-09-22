@@ -7,6 +7,20 @@ numbers, such as `0xb59a8c` in TypeScript or `11901580` in JSON.
 
 ## Imports
 
+Version 0.4.0 also exports `WallEditor` and its `WallEditorOptions`,
+`WallEditorState`, `WallEditorCallbacks`, and `WallEditorTool` types from the
+package root. Construct it during an existing scene's `create` with `config`,
+`selectedIndex`, `tool`, and `onAddWall`, `onSelectWall`, and `onUpdateWall`
+callbacks. Callbacks request edits; the host accepts or refuses them, rebuilds
+its renderer, and supplies accepted state with `setState`.
+
+Use `enabled: false` to suspend editing, `cancel()` for Escape, `setNewWall` for
+drawing defaults, and `refresh()` after changing camera zoom. `dragging` reports
+an active gesture. `destroy()` removes listeners and handles; scene shutdown
+calls it automatically. Camera navigation, keyboard controls, persistence,
+validation, deletion, and inspector UI remain host responsibilities. Rebind
+Arcade colliders when `WallMap.setWalls` replaces the wall physics group.
+
 Use the root for browser rendering and type-only imports for shared types.
 
 ```ts

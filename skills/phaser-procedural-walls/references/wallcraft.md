@@ -3,6 +3,12 @@
 Wallcraft is the bundled, in-memory wall editor. Export JSON before closing or
 reloading the page; don't promise automatic persistence.
 
+In 0.4.0 its canvas uses the public `WallEditor` component from the library.
+Consumers can attach the same interactions to an existing Phaser scene without
+embedding the React application. Open `/?embedded` in the demo or packaged editor
+for a Phaser-only example. Keep host data, rendering, camera navigation, and UI
+outside the component; feed accepted edits back with `setState`.
+
 ## Launch the editor
 
 With Node 20 or newer and a release containing the editor CLI, run either

@@ -5,6 +5,29 @@ Wallcraft is the repository's React, Vite, shadcn, and Phaser editor prototype. 
 This guide describes the current repository. A published npm release may lag
 behind these controls and collision changes; run from source to use this version.
 
+## Embed the wall editor in your game
+
+Starting with 0.4.0, you can import `WallEditor` from the package root and attach
+it to an existing Phaser scene. Wallcraft uses this same library component for
+its canvas interactions. It draws editing handles and emits callbacks for new
+walls, selection, endpoint changes, and window movement.
+
+Your game owns the wall data, renderer, camera, and controls. Update the data
+from callbacks, then pass the accepted state back with `setState`. For a networked
+game, wait for your server's accepted state. Deletion, preset selection, numeric
+properties, and adding or removing windows are ordinary edits to `WallMapConfig`
+from your own UI. The component does not create React panels or another game.
+
+Run `pnpm dev` and open `/?embedded` for a small Phaser-only example. You can also
+append `?embedded` to the packaged editor's URL. Press D to draw, S to select,
+Delete to remove a selected wall, and Escape to cancel a drag. P, T, H, and W
+change its preset, thickness, height, and window. E disables or enables editing.
+
+See [EmbeddedEditorScene.ts](../demo/editor/EmbeddedEditorScene.ts) for the
+complete runnable example and the [WallEditor API](api.md#walleditor) for the
+callback contract and lifecycle. The full Wallcraft application demonstrates a
+React host in [EditorScene.ts](../demo/editor/EditorScene.ts).
+
 ## Start the editor
 
 With Node 20 or newer, run:

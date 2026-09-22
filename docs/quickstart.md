@@ -146,3 +146,4 @@ The room is closed, so you cannot walk through its walls or windows. To compare 
 - Give the room a second preset with a texture: see `texture` and `lipTexture` in the [API reference](api.md).
 - Read [How it works](how-it-works.md) to understand the collision plane and why depth is the south edge.
 - Open the repository's [Wallcraft editor](wallcraft.md) to design a map interactively and export it as JSON.
+- Add wall editing to your existing scene with the [WallEditor component](api.md#walleditor) and [runnable example](../demo/editor/EmbeddedEditorScene.ts).

@@ -12,6 +12,7 @@ A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of 
 - One depth-sorted Container per wall; use `sprite.setDepth(sprite.y)` with automatic wall depths
 - Optional Arcade static bodies matching each wall's bottom footprint
 - Pure geometry module with unit tests, no Phaser needed to test it
+- Embeddable `WallEditor` for drawing, selection, endpoint handles, and window dragging in an existing Phaser scene
 - Wallcraft editor prototype: draw walls, drag endpoints and windows, edit height and drawing order, and manage presets
 - Resizable layers and inspector panels with wall selection, duplication, deletion, and reordering
 - Full-pane canvas with origin axes, two-finger scrolling to pan, and pinching to zoom
@@ -128,10 +129,22 @@ scene with player collisions.” The skill is distributed in Git, not in the npm
 package. Its bundled references track the repository, including changes made
 after the original 0.2.0 release.
 
+## 0.4.0 release notes
+
+Version 0.4.0 exports `WallEditor`, extracted from Wallcraft's canvas interactions.
+Attach it to your existing Phaser scene to draw snapped walls, select walls,
+drag endpoints, and move windows. Your application owns data, UI, rendering,
+camera navigation, and accepting or refusing edits.
+
+The standalone editor now uses this component. Open `/?embedded` in the demo
+or packaged editor for a small Phaser-only example with property controls.
+See the [embedding guide](docs/wallcraft.md#embed-the-wall-editor-in-your-game)
+and [API reference](docs/api.md#walleditor). Existing renderer and geometry APIs
+are unchanged.
+
 ## 0.3.0 release notes
 
-Version 0.3.0 is prepared for release but has not been published as part of this
-update. It adds large-map navigation, resizable layers and inspector panels,
+Version 0.3.0 adds large-map navigation, resizable layers and inspector panels,
 bulk height and thickness settings, window-width controls, and a Help dialog.
 Select and Draw now live in the top bar. Preview handles player occlusion with
 custom wall drawing orders. Documentation, screenshots, and the repository's
@@ -151,7 +164,7 @@ Review existing maps before upgrading your game:
   absolute drawing orders. Consumer games still need character sorting that
   accounts for these values; `setDepth(player.y)` assumes automatic wall depths.
 
-After publication, launch this specific version with
+Launch this specific version with
 `npx @mertdogar/phaser-procedural-walls@0.3.0 editor` or
 `pnpx @mertdogar/phaser-procedural-walls@0.3.0 editor`.
 
@@ -160,7 +173,7 @@ After publication, launch this specific version with
 ```bash
 pnpm install
 pnpm dev     # wall editor prototype: draw walls and import/export WallMapConfig JSON
-pnpm test    # geometry unit tests
+pnpm test    # geometry and editor interaction tests
 pnpm typecheck
 pnpm lint
 pnpm build   # library in dist/ and bundled app in dist/editor/

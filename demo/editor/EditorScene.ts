@@ -1,44 +1,24 @@
 import Phaser from "phaser";
 import { resolveWalls } from "../../src/geometry";
 import { WallMap } from "../../src/WallMap";
-import type { ResolvedWall, WallSpec, WindowSpec } from "../../src/types";
+import type { ResolvedWall } from "../../src/types";
+import { WallEditor, type WallEditorCallbacks, type WallEditorTool } from "../../src/WallEditor";
 import { getMapBounds, GRID_SIZE, type WallMapConfig } from "../editor-data";
 
-export type EditorTool = "select" | "wall";
-
-interface EditorCallbacks {
-  onAddWall: (wall: WallSpec) => void;
-  onSelectWall: (index: number | null) => void;
-  onUpdateWall: (index: number, patch: Partial<WallSpec>) => void;
-}
-
-interface AnchorDrag {
-  index: number;
-  endpoint: "start" | "end";
-  wall: WallSpec;
-}
-
-interface WindowDrag {
-  index: number;
-  windowIndex: number;
-  wall: WallSpec;
-}
+export type EditorTool = WallEditorTool;
+type EditorCallbacks = WallEditorCallbacks;
 
 export class EditorScene extends Phaser.Scene {
   private configData: WallMapConfig;
   private wallMap: WallMap | null = null;
   private previewWalls: ResolvedWall[] = [];
   private textureSources = new Map<string, string>();
-  private overlay!: Phaser.GameObjects.Graphics;
+  private editor!: WallEditor;
   private grid!: Phaser.GameObjects.Graphics;
   private originLabel!: Phaser.GameObjects.Text;
   private panStart: { x: number; y: number; scrollX: number; scrollY: number } | null = null;
   private tool: EditorTool = "wall";
   private selectedIndex: number | null = null;
-  private drawStart: Phaser.Math.Vector2 | null = null;
-  private pointerPosition: Phaser.Math.Vector2 | null = null;
-  private anchorDrag: AnchorDrag | null = null;
-  private windowDrag: WindowDrag | null = null;
   private preview = false;
   private player: Phaser.Physics.Arcade.Sprite | null = null;
   private playerCollider: Phaser.Physics.Arcade.Collider | null = null;
@@ -60,7 +40,12 @@ export class EditorScene extends Phaser.Scene {
     this.originLabel = this.add.text(0, 0, "0, 0", { fontSize: "12px", color: "#53675a", backgroundColor: "#f2efe8", padding: { x: 4, y: 2 } }).setDepth(-99);
     this.fitMap();
     this.drawGrid();
-    this.overlay = this.add.graphics().setDepth(10000);
+    this.editor = new WallEditor(this, {
+      config: this.configData, selectedIndex: this.selectedIndex, tool: this.tool, enabled: !this.preview,
+      onAddWall: (wall) => this.callbacks.onAddWall(wall),
+      onSelectWall: (index) => this.callbacks.onSelectWall(index),
+      onUpdateWall: (index, patch) => this.callbacks.onUpdateWall(index, patch),
+    });
     this.cursors = this.input.keyboard?.createCursorKeys() ?? null;
     this.input.on("pointerdown", this.handlePointerDown, this);
     this.input.on("pointermove", this.handlePointerMove, this);
@@ -69,7 +54,7 @@ export class EditorScene extends Phaser.Scene {
     this.input.on("wheel", this.handleWheel, this);
     this.scale.on("resize", this.drawGrid, this);
     this.events.once("shutdown", () => this.scale.off("resize", this.drawGrid, this));
-    this.drawOverlay();
+    this.editor?.refresh();
     void this.refreshWalls();
   }
 
@@ -86,6 +71,7 @@ export class EditorScene extends Phaser.Scene {
     this.preview = preview;
     this.callbacks = callbacks;
     if (!this.sys.isActive()) return;
+    this.editor.setState({ config, selectedIndex, tool, enabled: !preview });
     void this.refreshWalls();
   }
 
@@ -119,7 +105,7 @@ export class EditorScene extends Phaser.Scene {
       this.wallMap = new WallMap(this, this.preview ? { ...config, collide: true } : config);
       this.previewWalls = this.preview ? resolveWalls(config.walls, config.presets) : [];
       this.syncPlayer();
-      this.drawOverlay();
+      this.editor?.refresh();
       this.onTextureError("");
     } catch (error) {
       if (this.sys.isActive() && config === this.configData) this.onTextureError(error instanceof Error ? error.message : "Could not load textures.");
@@ -167,7 +153,7 @@ export class EditorScene extends Phaser.Scene {
     camera.setZoom(Math.min(1, availableWidth / bounds.width, (camera.height - 80) / bounds.height));
     camera.centerOn(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     this.drawGrid();
-    this.drawOverlay();
+    this.editor?.refresh();
   }
 
   zoomBy(factor: number, x = this.cameras.main.width / 2, y = this.cameras.main.height / 2): void {
@@ -182,7 +168,7 @@ export class EditorScene extends Phaser.Scene {
     camera.scrollX += before.x - after.x;
     camera.scrollY += before.y - after.y;
     this.drawGrid();
-    this.drawOverlay();
+    this.editor?.refresh();
   }
 
   private drawGrid(): void {
@@ -202,7 +188,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private handleWheel(pointer: Phaser.Input.Pointer): void {
-    if (this.drawStart || this.anchorDrag || this.windowDrag || this.panStart) return;
+    if (this.editor.dragging || this.panStart) return;
     const event = pointer.event as WheelEvent;
     const camera = this.cameras.main;
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? this.scale.canvasBounds.height : 1;
@@ -213,255 +199,29 @@ export class EditorScene extends Phaser.Scene {
     camera.scrollX += event.deltaX * unit * this.scale.displayScale.x / camera.zoom;
     camera.scrollY += event.deltaY * unit * this.scale.displayScale.y / camera.zoom;
     this.drawGrid();
-    this.drawOverlay();
+    this.editor?.refresh();
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if (pointer.middleButtonDown()) {
-      const camera = this.cameras.main;
-      this.panStart = { x: pointer.x, y: pointer.y, scrollX: camera.scrollX, scrollY: camera.scrollY };
-      this.input.setDefaultCursor("grabbing");
-      return;
-    }
-    if (this.preview) return;
-    pointer.updateWorldPoint(this.cameras.main);
-    const point = this.snapPoint(pointer.worldX, pointer.worldY);
-    if (this.tool === "select") {
-      const endpoint = this.findAnchor(pointer.worldX, pointer.worldY);
-      if (endpoint && this.selectedIndex !== null) {
-        this.anchorDrag = {
-          index: this.selectedIndex,
-          endpoint,
-          wall: { ...this.configData.walls[this.selectedIndex] },
-        };
-        this.input.setDefaultCursor("grabbing");
-        return;
-      }
-      const windowIndex = this.findWindow(pointer.worldX, pointer.worldY);
-      if (windowIndex !== null && this.selectedIndex !== null) {
-        this.windowDrag = {
-          index: this.selectedIndex,
-          windowIndex,
-          wall: { ...this.configData.walls[this.selectedIndex] },
-        };
-        this.input.setDefaultCursor("grabbing");
-        return;
-      }
-      this.callbacks.onSelectWall(this.findWall(pointer.worldX, pointer.worldY));
-      return;
-    }
-    this.drawStart = point;
-    this.pointerPosition = point.clone();
-    this.drawOverlay();
+    if (!pointer.middleButtonDown()) return;
+    this.editor.cancel();
+    const camera = this.cameras.main;
+    this.panStart = { x: pointer.x, y: pointer.y, scrollX: camera.scrollX, scrollY: camera.scrollY };
+    this.input.setDefaultCursor("grabbing");
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
-    if (this.panStart) {
-      const camera = this.cameras.main;
-      camera.scrollX = this.panStart.scrollX - (pointer.x - this.panStart.x) / camera.zoom;
-      camera.scrollY = this.panStart.scrollY - (pointer.y - this.panStart.y) / camera.zoom;
-      this.drawGrid();
-      return;
-    }
-    if (this.preview) return;
-    pointer.updateWorldPoint(this.cameras.main);
-    if (this.windowDrag && pointer.isDown) {
-      this.windowDrag.wall = this.moveWindow(
-        this.windowDrag.wall,
-        this.windowDrag.windowIndex,
-        pointer.worldX,
-        pointer.worldY,
-      );
-      this.drawOverlay();
-      return;
-    }
-    if (this.anchorDrag && pointer.isDown) {
-      this.anchorDrag.wall = this.moveEndpoint(
-        this.anchorDrag.wall,
-        this.anchorDrag.endpoint,
-        this.snapPoint(pointer.worldX, pointer.worldY),
-      );
-      this.drawOverlay();
-      return;
-    }
-    if (this.tool === "select" && !pointer.isDown) {
-      const windowIndex = this.findWindow(pointer.worldX, pointer.worldY);
-      if (windowIndex !== null && this.selectedIndex !== null) {
-        const wall = this.configData.walls[this.selectedIndex];
-        this.input.setDefaultCursor(wall.y1 === wall.y2 ? "ew-resize" : "ns-resize");
-      } else {
-        this.input.setDefaultCursor(this.findAnchor(pointer.worldX, pointer.worldY) ? "grab" : "default");
-      }
-    }
-    if (!this.drawStart || !pointer.isDown) return;
-    this.pointerPosition = this.axisLock(this.drawStart, this.snapPoint(pointer.worldX, pointer.worldY));
-    this.drawOverlay();
+    if (!this.panStart) return;
+    const camera = this.cameras.main;
+    camera.scrollX = this.panStart.scrollX - (pointer.x - this.panStart.x) / camera.zoom;
+    camera.scrollY = this.panStart.scrollY - (pointer.y - this.panStart.y) / camera.zoom;
+    this.drawGrid();
   }
 
-  private handlePointerUp(pointer: Phaser.Input.Pointer): void {
-    if (this.panStart) {
-      this.panStart = null;
-      this.input.setDefaultCursor("default");
-      return;
-    }
-    if (this.preview) return;
-    pointer.updateWorldPoint(this.cameras.main);
-    if (this.windowDrag) {
-      const drag = this.windowDrag;
-      const wall = this.moveWindow(drag.wall, drag.windowIndex, pointer.worldX, pointer.worldY);
-      this.windowDrag = null;
-      this.input.setDefaultCursor("default");
-      this.callbacks.onUpdateWall(drag.index, { windows: wall.windows });
-      this.drawOverlay();
-      return;
-    }
-    if (this.anchorDrag) {
-      const drag = this.anchorDrag;
-      const wall = this.moveEndpoint(
-        drag.wall,
-        drag.endpoint,
-        this.snapPoint(pointer.worldX, pointer.worldY),
-      );
-      this.anchorDrag = null;
-      this.input.setDefaultCursor("default");
-      if (Phaser.Math.Distance.Between(wall.x1, wall.y1, wall.x2, wall.y2) >= GRID_SIZE) {
-        this.callbacks.onUpdateWall(drag.index, {
-          x1: wall.x1,
-          y1: wall.y1,
-          x2: wall.x2,
-          y2: wall.y2,
-        });
-      }
-      this.drawOverlay();
-      return;
-    }
-    if (!this.drawStart) return;
-    const end = this.axisLock(this.drawStart, this.snapPoint(pointer.worldX, pointer.worldY));
-    const start = this.drawStart;
-    this.drawStart = null;
-    this.pointerPosition = null;
-    if (Phaser.Math.Distance.Between(start.x, start.y, end.x, end.y) >= GRID_SIZE) {
-      this.callbacks.onAddWall({
-        x1: start.x,
-        y1: start.y,
-        x2: end.x,
-        y2: end.y,
-        thickness: 16,
-        preset: Object.hasOwn(this.configData.presets, "interior") ? "interior" : Object.keys(this.configData.presets)[0],
-      });
-    }
-    this.drawOverlay();
-  }
-
-  private drawOverlay(): void {
-    if (!this.overlay) return;
-    this.overlay.clear();
-    if (this.preview) return;
-    const wall = this.windowDrag?.wall
-      ?? this.anchorDrag?.wall
-      ?? (this.selectedIndex === null ? null : this.configData.walls[this.selectedIndex]);
-    if (wall) {
-      const radius = 8 / this.cameras.main.zoom;
-      this.overlay.lineStyle(4, 0x2d7a4c, 1).lineBetween(wall.x1, wall.y1, wall.x2, wall.y2);
-      this.overlay.fillStyle(0xffffff, 1).fillCircle(wall.x1, wall.y1, radius).fillCircle(wall.x2, wall.y2, radius);
-      this.overlay.lineStyle(3 / this.cameras.main.zoom, 0x2d7a4c, 1).strokeCircle(wall.x1, wall.y1, radius).strokeCircle(wall.x2, wall.y2, radius);
-      for (const [index, rect] of this.getWindowRects(wall).entries()) {
-        const active = this.windowDrag?.windowIndex === index;
-        this.overlay.fillStyle(active ? 0x2d7a4c : 0xffffff, active ? 0.35 : 0.75).fillRect(rect.x, rect.y, rect.w, rect.h);
-        this.overlay.lineStyle(3, 0x2d7a4c, 1).strokeRect(rect.x, rect.y, rect.w, rect.h);
-      }
-    }
-    if (this.drawStart && this.pointerPosition) {
-      this.overlay.lineStyle(4, 0xe39a36, 0.95).lineBetween(
-        this.drawStart.x,
-        this.drawStart.y,
-        this.pointerPosition.x,
-        this.pointerPosition.y,
-      );
-      this.overlay.fillStyle(0xe39a36).fillCircle(this.drawStart.x, this.drawStart.y, 5);
-    }
-  }
-
-  private findWall(x: number, y: number): number | null {
-    let nearest: { index: number; distance: number } | null = null;
-    for (const [index, wall] of this.configData.walls.entries()) {
-      const distance = wall.x1 === wall.x2
-        ? Math.hypot(x - wall.x1, y - Phaser.Math.Clamp(y, Math.min(wall.y1, wall.y2), Math.max(wall.y1, wall.y2)))
-        : Math.hypot(x - Phaser.Math.Clamp(x, Math.min(wall.x1, wall.x2), Math.max(wall.x1, wall.x2)), y - wall.y1);
-      if (distance <= wall.thickness / 2 + 10 / this.cameras.main.zoom && (!nearest || distance < nearest.distance)) {
-        nearest = { index, distance };
-      }
-    }
-    return nearest?.index ?? null;
-  }
-
-  private findAnchor(x: number, y: number): "start" | "end" | null {
-    if (this.selectedIndex === null) return null;
-    const wall = this.configData.walls[this.selectedIndex];
-    if (!wall) return null;
-    const startDistance = Phaser.Math.Distance.Between(x, y, wall.x1, wall.y1);
-    const endDistance = Phaser.Math.Distance.Between(x, y, wall.x2, wall.y2);
-    if (Math.min(startDistance, endDistance) > 16 / this.cameras.main.zoom) return null;
-    return startDistance <= endDistance ? "start" : "end";
-  }
-
-  private findWindow(x: number, y: number): number | null {
-    if (this.selectedIndex === null) return null;
-    const wall = this.configData.walls[this.selectedIndex];
-    if (!wall) return null;
-    const padding = 10 / this.cameras.main.zoom;
-    const index = this.getWindowRects(wall).findIndex((rect) => (
-      x >= rect.x - padding
-      && x <= rect.x + rect.w + padding
-      && y >= rect.y - padding
-      && y <= rect.y + rect.h + padding
-    ));
-    return index === -1 ? null : index;
-  }
-
-  private getWindowRects(wall: WallSpec) {
-    return resolveWalls([wall], this.configData.presets)[0]?.windows ?? [];
-  }
-
-  private moveWindow(wall: WallSpec, windowIndex: number, x: number, y: number): WallSpec {
-    const windows = wall.windows?.map((window) => ({ ...window })) ?? [];
-    const window = windows[windowIndex];
-    if (!window) return wall;
-    const horizontal = wall.y1 === wall.y2;
-    const direction = horizontal ? Math.sign(wall.x2 - wall.x1) || 1 : Math.sign(wall.y2 - wall.y1) || 1;
-    const pointerOffset = horizontal ? (x - wall.x1) * direction : (y - wall.y1) * direction;
-    const length = Math.abs(wall.x2 - wall.x1) + Math.abs(wall.y2 - wall.y1);
-    const maxOffset = Math.max(0, length - window.width);
-    const offset = Phaser.Math.Clamp(
-      Math.round((pointerOffset - window.width / 2) / GRID_SIZE) * GRID_SIZE,
-      0,
-      maxOffset,
-    );
-    windows[windowIndex] = { ...window, offset } satisfies WindowSpec;
-    return { ...wall, windows };
-  }
-
-  private moveEndpoint(wall: WallSpec, endpoint: "start" | "end", point: Phaser.Math.Vector2): WallSpec {
-    const fixed = endpoint === "start"
-      ? new Phaser.Math.Vector2(wall.x2, wall.y2)
-      : new Phaser.Math.Vector2(wall.x1, wall.y1);
-    const moved = this.axisLock(fixed, point);
-    return endpoint === "start"
-      ? { ...wall, x1: moved.x, y1: moved.y }
-      : { ...wall, x2: moved.x, y2: moved.y };
-  }
-
-  private snapPoint(x: number, y: number): Phaser.Math.Vector2 {
-    return new Phaser.Math.Vector2(
-      Math.round(x / GRID_SIZE) * GRID_SIZE,
-      Math.round(y / GRID_SIZE) * GRID_SIZE,
-    );
-  }
-
-  private axisLock(start: Phaser.Math.Vector2, end: Phaser.Math.Vector2): Phaser.Math.Vector2 {
-    return Math.abs(end.x - start.x) >= Math.abs(end.y - start.y)
-      ? new Phaser.Math.Vector2(end.x, start.y)
-      : new Phaser.Math.Vector2(start.x, end.y);
+  private handlePointerUp(): void {
+    if (!this.panStart) return;
+    this.panStart = null;
+    this.input.setDefaultCursor("default");
   }
 
   private syncPlayer(): void {

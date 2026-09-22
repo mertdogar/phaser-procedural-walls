@@ -1,6 +1,6 @@
 {
   "name": "@mertdogar/phaser-procedural-walls",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Phaser 4 scene plugin that renders procedural top-down walls with faces, see-through windows, depth sorting and Arcade colliders from wall centerline data.",
   "keywords": [
     "phaser",

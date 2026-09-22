@@ -3,7 +3,7 @@
 The renderer and types are available from the package root:
 
 ```ts
-import { WallMapPlugin, WallMap, resolveWalls } from "@mertdogar/phaser-procedural-walls";
+import { WallEditor, WallMapPlugin, WallMap, resolveWalls } from "@mertdogar/phaser-procedural-walls";
 import type { WallMapConfig, WallSpec, WallPreset, WindowSpec, ResolvedWall, Rect } from "@mertdogar/phaser-procedural-walls";
 ```
 
@@ -12,6 +12,107 @@ For server-side geometry without importing Phaser, use the dedicated entry point
 ```ts
 import { resolveWalls, cutRects } from "@mertdogar/phaser-procedural-walls/geometry";
 ```
+
+## WallEditor
+
+`new WallEditor(scene, options)` attaches editing interactions and a Graphics
+overlay to an existing, created Phaser scene. It needs neither Arcade Physics
+nor `WallMapPlugin` registration. Its runtime imports Phaser and the library's
+geometry code, not React or the standalone application's UI.
+
+The host owns the `WallMapConfig`. Callbacks request edits; they don't mutate
+your config or rebuild your `WallMap`. This lets you accept changes locally or
+send them to a server before displaying the accepted result.
+
+### Options and state
+
+Pass these fields when you construct the editor:
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `config` | Required | Current `WallMapConfig`; use a new object when accepting edits. |
+| `selectedIndex` | Required | Index in `config.walls`, or `null`. |
+| `tool` | Required | `"wall"` to draw or `"select"` to select and drag handles. |
+| `onAddWall(wall)` | Required | Requests adding a `WallSpec` after a draw gesture finishes. |
+| `onSelectWall(index)` | Required | Requests selecting a wall, or clearing selection with `null`. |
+| `onUpdateWall(index, patch)` | Required | Requests an endpoint or window-offset edit when a drag finishes. |
+| `enabled` | `true` | Whether editing input and the overlay are active. |
+| `camera` | `scene.cameras.main` | Camera used to convert pointer coordinates and size handles. |
+| `gridSize` | `32` | Positive, finite world-unit snap step and minimum drawn wall length. |
+| `overlayDepth` | `10000` | Depth of the editing overlay. |
+| `newWall` | Thickness `16` | Optional `preset`, `thickness`, and `height` defaults for new walls. |
+
+Without an explicit new-wall preset, the editor uses `interior` if present,
+otherwise the first preset. Drawing without an existing preset throws an error.
+
+Exported types are `WallEditorOptions`, `WallEditorState`, `WallEditorCallbacks`,
+and `WallEditorTool`. Wall selection uses array indices, not persistent IDs.
+Translate indices into your own identifiers when sending edits to a server.
+
+### Methods
+
+Use these methods to connect your application's controls:
+
+| Method or property | Behavior |
+| --- | --- |
+| `setState({ config, selectedIndex, tool, enabled? })` | Supplies the current accepted state. A changed config reference, selection, tool, or enabled state cancels any unfinished gesture. Omitted `enabled` means `true`. |
+| `setNewWall({ preset?, thickness?, height? })` | Replaces new-wall defaults. Omitted thickness resets to `16`; omitted preset restores automatic selection. |
+| `cancel()` | Discards the unfinished gesture without an edit callback. Wire your Escape key to it. |
+| `dragging` | Whether a drawing, endpoint, or window gesture is in progress. |
+| `refresh()` | Redraws the overlay, for example after changing camera zoom. |
+| `destroy()` | Removes the component's input and shutdown listeners and destroys its overlay. Called automatically on scene shutdown. |
+
+The component listens for pointer down, move, up, and up outside the canvas.
+Only primary-button presses begin edits; it doesn't install keyboard, wheel,
+pan, or zoom handlers. Coordinate your existing scene input so a wall gesture
+doesn't also pick furniture or move the camera. Disable the editor when another
+tool owns input. In a scene with multiple cameras, the host also controls which
+cameras render the overlay.
+
+### Accept edits locally
+
+This example belongs inside a scene's `create` method, with an existing `config`:
+
+```ts
+const wallMap = new WallMap(this, config);
+let selectedIndex: number | null = null;
+let tool: WallEditorTool = "wall";
+
+const sync = () => editor.setState({ config, selectedIndex, tool });
+const commit = (walls: WallSpec[]) => {
+  config = { ...config, walls };
+  wallMap.setWalls(walls);
+  sync();
+};
+const editor = new WallEditor(this, {
+  config, selectedIndex, tool,
+  onAddWall: (wall) => {
+    selectedIndex = config.walls.length;
+    tool = "select";
+    commit([...config.walls, wall]);
+  },
+  onSelectWall: (index) => { selectedIndex = index; sync(); },
+  onUpdateWall: (index, patch) => {
+    commit(config.walls.map((wall, i) => i === index ? { ...wall, ...patch } : wall));
+  },
+});
+```
+
+Import `WallEditorTool` and `WallSpec` as types from the package root. The
+[runnable embedding example](../demo/editor/EmbeddedEditorScene.ts) also shows
+deletion, preset and dimension controls, window creation/removal, and cleanup.
+
+Validate proposed edits before accepting them if your application has placement
+rules. The component doesn't validate world bounds, occupants, connectivity,
+window overlap, or windows extending past a resized wall. To refuse an edit,
+keep the current config and show your own message. Feed authoritative replacement
+configs through `setState` to cancel gestures based on stale data.
+
+Deletion and inspector changes are host operations on `config.walls`; there are
+no global Delete shortcuts, persistence, undo history, or permission rules in
+the component. Presets and texture loading also remain host responsibilities.
+`WallMap.setWalls` replaces its physics group, so recreate any Arcade collider
+bindings after accepting changes when collision is enabled.
 
 ## WallMapPlugin
 

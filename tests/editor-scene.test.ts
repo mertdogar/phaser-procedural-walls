@@ -21,12 +21,146 @@ vi.mock("phaser", () => {
 vi.mock("../src/WallMap", () => ({ WallMap: class { destroy() {} } }));
 
 import { EditorScene } from "../demo/editor/EditorScene";
+import { WallEditor, type WallEditorOptions } from "../src/WallEditor";
 import { getMapBounds } from "../demo/editor-data";
 import { resolveWalls } from "../src/geometry";
 
-const pointer = (x: number, y: number) => ({ worldX: x, worldY: y, updateWorldPoint: vi.fn(), middleButtonDown: () => false }) as unknown as Phaser.Input.Pointer;
+const pointer = (x: number, y: number) => ({ worldX: x, worldY: y, updateWorldPoint: vi.fn(), leftButtonDown: () => true, isDown: true }) as unknown as Phaser.Input.Pointer;
+
+function makeEditor(options: Partial<WallEditorOptions> = {}) {
+  const graphics = {
+    setDepth: vi.fn().mockReturnThis(), clear: vi.fn().mockReturnThis(),
+    lineStyle: vi.fn().mockReturnThis(), lineBetween: vi.fn().mockReturnThis(),
+    fillStyle: vi.fn().mockReturnThis(), fillCircle: vi.fn().mockReturnThis(),
+    strokeCircle: vi.fn().mockReturnThis(), fillRect: vi.fn().mockReturnThis(),
+    strokeRect: vi.fn().mockReturnThis(), destroy: vi.fn(),
+  };
+  const input = { on: vi.fn(), off: vi.fn(), setDefaultCursor: vi.fn() };
+  const events = { once: vi.fn(), off: vi.fn() };
+  const camera = { zoom: 1 };
+  const scene = { input, events, cameras: { main: camera }, add: { graphics: () => graphics } };
+  const callbacks = { onAddWall: vi.fn(), onSelectWall: vi.fn(), onUpdateWall: vi.fn() };
+  const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [] };
+  const editor = new WallEditor(scene as unknown as Phaser.Scene, {
+    config, selectedIndex: null, tool: "wall", ...callbacks, ...options,
+  });
+  const emit = (event: string, p: Phaser.Input.Pointer) => {
+    for (const [name, handler, context] of input.on.mock.calls) {
+      if (name === event) handler.call(context, p);
+    }
+  };
+  return { editor, input, events, camera, graphics, emit, ...callbacks };
+}
 
 describe("editor world coordinates", () => {
+  it("uses custom grid, camera, defaults, and overlay depth without changing host data", () => {
+    const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [] };
+    const camera = { zoom: 2 } as Phaser.Cameras.Scene2D.Camera;
+    const { emit, onAddWall, graphics } = makeEditor({ config, camera, gridSize: 16, overlayDepth: 500, newWall: { preset: "p", thickness: 24, height: 80 } });
+    const down = pointer(-17, 18);
+    emit("pointerdown", down);
+    emit("pointermove", pointer(51, 22));
+    expect(onAddWall).not.toHaveBeenCalled();
+    emit("pointerupoutside", pointer(51, 22));
+    expect(onAddWall).toHaveBeenCalledExactlyOnceWith({ x1: -16, y1: 16, x2: 48, y2: 16, thickness: 24, height: 80, preset: "p" });
+    expect(config.walls).toEqual([]);
+    expect(down.updateWorldPoint).toHaveBeenCalledWith(camera);
+    expect(graphics.setDepth).toHaveBeenCalledWith(500);
+  });
+
+  it("cancels a pending gesture when disabled and resumes only on a new press", () => {
+    const { editor, emit, onAddWall } = makeEditor();
+    emit("pointerdown", pointer(0, 0));
+    expect(editor.dragging).toBe(true);
+    const state = { config: { presets: { p: { fill: 0, edge: 0 } }, walls: [] }, selectedIndex: null, tool: "wall" as const };
+    editor.setState({ ...state, enabled: false });
+    emit("pointerup", pointer(96, 0));
+    emit("pointerdown", pointer(0, 0));
+    expect(editor.dragging).toBe(false);
+    editor.setState({ ...state, enabled: true });
+    emit("pointerup", pointer(96, 0));
+    expect(onAddWall).not.toHaveBeenCalled();
+    emit("pointerdown", pointer(0, 0));
+    emit("pointerup", pointer(96, 0));
+    expect(onAddWall).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels instead of applying a stale index after the host replaces the map", () => {
+    const wall = { x1: 0, y1: 0, x2: 128, y2: 0, thickness: 16, preset: "p" };
+    const { editor, emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
+    emit("pointerdown", pointer(128, 0));
+    editor.setState({ config: { presets: {}, walls: [] }, selectedIndex: null, tool: "select" });
+    emit("pointerup", pointer(192, 0));
+    expect(onUpdateWall).not.toHaveBeenCalled();
+    expect(wall.x2).toBe(128);
+  });
+
+  it("selects a wall and clears selection on empty space", () => {
+    const { emit, onSelectWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [{ x1: 0, y1: 0, x2: 128, y2: 0, thickness: 16, preset: "p" }] }, tool: "select" });
+    emit("pointerdown", pointer(64, 4));
+    expect(onSelectWall).toHaveBeenLastCalledWith(0);
+    emit("pointerdown", pointer(300, 300));
+    expect(onSelectWall).toHaveBeenLastCalledWith(null);
+  });
+
+  it("drags a window on a reversed wall without mutating its config", () => {
+    const wall = { x1: 256, y1: 0, x2: 0, y2: 0, thickness: 16, preset: "p", windows: [{ offset: 64, width: 32 }] };
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, tool: "select", selectedIndex: 0 });
+    emit("pointerdown", pointer(176, 0));
+    emit("pointermove", pointer(112, 0));
+    expect(onUpdateWall).not.toHaveBeenCalled();
+    emit("pointerup", pointer(112, 0));
+    expect(onUpdateWall).toHaveBeenCalledExactlyOnceWith(0, { windows: [{ offset: 128, width: 32 }] });
+    expect(wall.windows).toEqual([{ offset: 64, width: 32 }]);
+  });
+
+  it("does not draw on a non-primary press or a click shorter than one grid step", () => {
+    const { emit, onAddWall } = makeEditor();
+    emit("pointerdown", { ...pointer(0, 0), leftButtonDown: () => false } as Phaser.Input.Pointer);
+    emit("pointerup", pointer(128, 0));
+    emit("pointerdown", pointer(0, 0));
+    emit("pointerup", pointer(2, 3));
+    expect(onAddWall).not.toHaveBeenCalled();
+  });
+
+  it("cancels with Escape integration and applies new drawing defaults", () => {
+    const { editor, emit, onAddWall } = makeEditor();
+    emit("pointerdown", pointer(0, 0));
+    editor.cancel();
+    emit("pointerup", pointer(128, 0));
+    expect(onAddWall).not.toHaveBeenCalled();
+    editor.setNewWall({ thickness: 48 });
+    emit("pointerdown", pointer(0, 0));
+    emit("pointerup", pointer(128, 0));
+    expect(onAddWall).toHaveBeenCalledWith(expect.objectContaining({ thickness: 48, preset: "p" }));
+  });
+
+  it("releases exactly its listeners and overlay on explicit destroy or scene shutdown", () => {
+    for (const shutdown of [false, true]) {
+      const { editor, input, events, graphics } = makeEditor();
+      if (shutdown) {
+        const [name, handler, context] = events.once.mock.calls[0];
+        expect(name).toBe("shutdown");
+        handler.call(context);
+      } else editor.destroy();
+      for (const [name, handler, context] of input.on.mock.calls) expect(input.off).toHaveBeenCalledWith(name, handler, context);
+      expect(input.off).toHaveBeenCalledTimes(4);
+      expect(events.off).toHaveBeenCalledWith("shutdown", expect.any(Function), editor);
+      expect(graphics.destroy).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it.each([0, -1, NaN, Infinity])("rejects invalid grid size %s", (gridSize) => {
+    expect(() => makeEditor({ gridSize })).toThrow("gridSize must be positive and finite");
+  });
+
+  it("reports a missing preset instead of emitting an invalid new wall", () => {
+    const { emit, onAddWall } = makeEditor({ config: { presets: {}, walls: [] } });
+    emit("pointerdown", pointer(0, 0));
+    expect(() => emit("pointerup", pointer(128, 0))).toThrow("Choose an existing wall preset");
+    expect(onAddWall).not.toHaveBeenCalled();
+  });
+
   it.each([
     [680, 618.9588499999999, false], [735, 618.9588499999999, true],
     [680, 5000, false], [735, 5000, true],
@@ -50,21 +184,19 @@ describe("editor world coordinates", () => {
     (x1, y1, x2, y2) => {
       const onAddWall = vi.fn();
       const config = { presets: { interior: { fill: 0, edge: 0 } }, walls: [] };
-      const scene = new EditorScene(config, vi.fn());
-      scene.setEditorState(config, null, "wall", false, {
-        onAddWall, onSelectWall: vi.fn(), onUpdateWall: vi.fn(),
-      });
-      scene["handlePointerDown"](pointer(x1, y1));
-      scene["handlePointerUp"](pointer(x2, y2));
+      const { emit } = makeEditor({ config, onAddWall });
+      emit("pointerdown", pointer(x1, y1));
+      emit("pointerup", pointer(x2, y2));
       expect(onAddWall).toHaveBeenCalledWith(expect.objectContaining({ x1, y1, x2, y2 }));
     },
   );
 
   it("does not clamp a dragged endpoint on a large map", () => {
     const wall: WallSpec = { x1: 1600, y1: 1280, x2: 2112, y2: 1280, thickness: 20, preset: "p" };
-    const scene = new EditorScene({ presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, vi.fn());
-    expect(scene["moveEndpoint"](wall, "end", scene["snapPoint"](2240, 1290)))
-      .toMatchObject({ x1: 1600, y1: 1280, x2: 2240, y2: 1280 });
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, tool: "select", selectedIndex: 0 });
+    emit("pointerdown", pointer(2112, 1280));
+    emit("pointerup", pointer(2240, 1290));
+    expect(onUpdateWall).toHaveBeenCalledWith(0, { x1: 1600, y1: 1280, x2: 2240, y2: 1280 });
   });
 
   it("includes negative coordinates, wall thickness, and faces in map bounds", () => {
@@ -102,11 +234,11 @@ describe("editor world coordinates", () => {
     const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [] };
     const scene = new EditorScene(config, vi.fn());
     Object.assign(scene.cameras.main, { zoom: 0.5, scrollX: 1000, scrollY: 800 });
-    Object.assign(scene, { input: { setDefaultCursor: vi.fn() } });
+    Object.assign(scene, { input: { setDefaultCursor: vi.fn() }, editor: makeEditor().editor });
     scene.setEditorState(config, null, "wall", false, { onAddWall, onSelectWall: vi.fn(), onUpdateWall: vi.fn() });
     scene["handlePointerDown"]({ x: 100, y: 100, middleButtonDown: () => true } as Phaser.Input.Pointer);
     scene["handlePointerMove"]({ x: 200, y: 150 } as Phaser.Input.Pointer);
-    scene["handlePointerUp"]({} as Phaser.Input.Pointer);
+    scene["handlePointerUp"]();
     expect(scene.cameras.main.scrollX).toBe(800);
     expect(scene.cameras.main.scrollY).toBe(700);
     expect(onAddWall).not.toHaveBeenCalled();
@@ -114,7 +246,7 @@ describe("editor world coordinates", () => {
 
   it.each([[0, 1], [1, 16], [2, 480]])("pans both axes with wheel delta mode %s", (deltaMode, unit) => {
     const scene = new EditorScene({ presets: {}, walls: [] }, vi.fn());
-    Object.assign(scene, { scale: { displayScale: { x: 2, y: 2 }, canvasBounds: { height: 480 } } });
+    Object.assign(scene, { editor: makeEditor().editor, scale: { displayScale: { x: 2, y: 2 }, canvasBounds: { height: 480 } } });
     Object.assign(scene.cameras.main, { zoom: 0.5, scrollX: 100, scrollY: 200 });
     const zoom = vi.spyOn(scene, "zoomBy");
     scene["handleWheel"]({ event: { deltaX: 3, deltaY: -5, deltaMode, ctrlKey: false } } as Phaser.Input.Pointer);
@@ -136,6 +268,7 @@ describe("editor world coordinates", () => {
 
   it("zooms pinch gestures at the pointer without panning", () => {
     const scene = new EditorScene({ presets: {}, walls: [] }, vi.fn());
+    Object.assign(scene, { editor: makeEditor().editor });
     const zoom = vi.spyOn(scene, "zoomBy").mockImplementation(() => {});
     scene["handleWheel"]({ x: 300, y: 200, event: { deltaX: 0, deltaY: -10, deltaMode: 0, ctrlKey: true } } as Phaser.Input.Pointer);
     expect(zoom).toHaveBeenCalledWith(Math.exp(0.1), 300, 200);
@@ -143,7 +276,9 @@ describe("editor world coordinates", () => {
 
   it("ignores navigation gestures while drawing a wall", () => {
     const scene = new EditorScene({ presets: {}, walls: [] }, vi.fn());
-    scene["handlePointerDown"](pointer(32, 32));
+    const { editor, emit } = makeEditor();
+    Object.assign(scene, { editor });
+    emit("pointerdown", pointer(32, 32));
     const zoom = vi.spyOn(scene, "zoomBy");
     scene["handleWheel"]({ event: { deltaY: -10, ctrlKey: true } } as Phaser.Input.Pointer);
     expect(zoom).not.toHaveBeenCalled();
