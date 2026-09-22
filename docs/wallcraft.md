@@ -78,9 +78,10 @@ camera follows the player while moving.
 1. Choose the wall tool in the top bar and drag on the map. Drawing snaps to a 32 px grid and locks to a horizontal or vertical line.
 2. Choose the pointer tool and click a wall. Its endpoints and inspector appear.
 3. Drag either circular endpoint to resize the wall. The opposite endpoint stays fixed, and the segment stays axis-aligned.
-4. Use **X1**, **Y1**, **X2**, and **Y2** for numeric coordinates. Keep either X1 = X2 or Y1 = Y2; diagonal walls are unsupported.
-5. Set **Thickness** for body width and **Height** for the visible face. An edited height overrides the preset for that wall.
-6. Use **Drawing order** to resolve overlapping segments. Higher values render later. Clear it for automatic sorting.
+4. Drag the green line between the endpoints to move the entire segment in 32 px steps. A translucent preview follows the pointer; release to apply or press Escape to cancel. Windows move with the segment; other walls stay fixed. This gesture is available in the repository version after 0.4.0.
+5. Use **X1**, **Y1**, **X2**, and **Y2** for numeric coordinates. Keep either X1 = X2 or Y1 = Y2; diagonal walls are unsupported.
+6. Set **Thickness** for body width and **Height** for the visible face. An edited height overrides the preset for that wall.
+7. Use **Drawing order** to resolve overlapping segments. Higher values render later. Clear it for automatic sorting.
 
 ![Selected wall with endpoint handles, layers above the docked inspector, and origin axes](images/wallcraft-editor.png)
 

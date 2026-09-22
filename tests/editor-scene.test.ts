@@ -18,10 +18,14 @@ vi.mock("phaser", () => {
   } };
 });
 
-vi.mock("../src/WallMap", () => ({ WallMap: class { destroy() {} } }));
+vi.mock("../src/WallMap", () => ({ WallMap: class {
+  containers = [{ setPosition: vi.fn().mockReturnThis(), setAlpha: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis() }];
+  destroy() {}
+} }));
 
 import { EditorScene } from "../demo/editor/EditorScene";
 import { WallEditor, type WallEditorOptions } from "../src/WallEditor";
+import { WallMap } from "../src/WallMap";
 import { getMapBounds } from "../demo/editor-data";
 import { resolveWalls } from "../src/geometry";
 
@@ -53,6 +57,66 @@ function makeEditor(options: Partial<WallEditorOptions> = {}) {
 }
 
 describe("editor world coordinates", () => {
+  it.each([
+    [10, 20, 266, 20, 110, 20],
+    [266, 20, 10, 20, 110, 20],
+    [10, 20, 10, 276, 10, 120],
+    [10, 276, 10, 20, 10, 120],
+  ])("moves the whole segment from (%s, %s) to (%s, %s) without changing its data during preview", (x1, y1, x2, y2, x, y) => {
+    const wall = { x1, y1, x2, y2, thickness: 20, height: 48, preset: "p", windows: [{ offset: 192, width: 32 }] };
+    const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] };
+    const { emit, editor, onUpdateWall } = makeEditor({ config, tool: "select", selectedIndex: 0, gridSize: 16 });
+    emit("pointerdown", pointer(x, y));
+    expect(editor.dragging).toBe(true);
+    emit("pointermove", pointer(x + 35, y - 49));
+    expect(config.walls[0]).toEqual(wall);
+    expect(onUpdateWall).not.toHaveBeenCalled();
+    emit("pointerupoutside", pointer(x + 35, y - 49));
+    expect(onUpdateWall).toHaveBeenCalledExactlyOnceWith(0, { x1: x1 + 32, y1: y1 - 48, x2: x2 + 32, y2: y2 - 48 });
+    expect(wall.windows).toEqual([{ offset: 192, width: 32 }]);
+    expect(editor.dragging).toBe(false);
+  });
+
+  it.each(["cancel", "disabled", "replacement", "destroy"])("cleans up a wall move on %s without emitting an edit", (action) => {
+    const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 16, preset: "p" }] };
+    const { emit, editor, onUpdateWall } = makeEditor({ config, tool: "select", selectedIndex: 0 });
+    const destroyed = vi.spyOn(WallMap.prototype, "destroy");
+    emit("pointerdown", pointer(100, 0));
+    emit("pointermove", pointer(132, 32));
+    if (action === "cancel") editor.cancel();
+    else if (action === "destroy") editor.destroy();
+    else editor.setState({ config: action === "replacement" ? { ...config, walls: [] } : config, tool: "select", selectedIndex: null, enabled: action !== "disabled" });
+    expect(destroyed).toHaveBeenCalledTimes(1);
+    expect(editor.dragging).toBe(false);
+    if (action !== "destroy") emit("pointerup", pointer(132, 32));
+    expect(onUpdateWall).not.toHaveBeenCalled();
+    destroyed.mockRestore();
+  });
+
+  it("does not emit an edit for a centerline click or a drag back to the origin", () => {
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 16, preset: "p" }] }, tool: "select", selectedIndex: 0 });
+    emit("pointerdown", pointer(100, 0));
+    emit("pointerup", pointer(102, 1));
+    emit("pointerdown", pointer(100, 0));
+    emit("pointermove", pointer(164, 64));
+    emit("pointerup", pointer(100, 0));
+    expect(onUpdateWall).not.toHaveBeenCalled();
+  });
+
+  it("prioritizes endpoints over the centerline and uses a zoom-scaled centerline hit area", () => {
+    const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 40, preset: "p" }] };
+    const { emit, editor, camera, onUpdateWall } = makeEditor({ config, tool: "select", selectedIndex: 0 });
+    emit("pointerdown", pointer(250, 0));
+    emit("pointerup", pointer(288, 0));
+    expect(onUpdateWall).toHaveBeenCalledExactlyOnceWith(0, { x1: 0, y1: 0, x2: 288, y2: 0 });
+    camera.zoom = 2;
+    emit("pointerdown", pointer(100, 4));
+    expect(editor.dragging).toBe(false);
+    emit("pointerdown", pointer(100, 2));
+    expect(editor.dragging).toBe(true);
+    editor.cancel();
+  });
+
   it("uses custom grid, camera, defaults, and overlay depth without changing host data", () => {
     const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [] };
     const camera = { zoom: 2 } as Phaser.Cameras.Scene2D.Camera;

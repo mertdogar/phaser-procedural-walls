@@ -21,6 +21,12 @@ calls it automatically. Camera navigation, keyboard controls, persistence,
 validation, deletion, and inspector UI remain host responsibilities. Rebind
 Arcade colliders when `WallMap.setWalls` replaces the wall physics group.
 
+The source after 0.4.0 also supports dragging the selected centerline to move a
+whole wall. Both endpoints receive the same grid-snapped delta; windows retain
+their offsets and other walls stay fixed. A non-colliding ghost previews the
+move, then one `onUpdateWall` coordinate patch is requested on release. Endpoint
+and window handles take priority. Cancellation discards the ghost without edits.
+
 Use the root for browser rendering and type-only imports for shared types.
 
 ```ts

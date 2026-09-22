@@ -407,7 +407,7 @@ function EditorHelp() {
           {[
             ["Pan", "Two-finger scroll on a trackpad, scroll with a mouse, or drag with the middle mouse button."],
             ["Zoom", "Pinch on a trackpad, use Ctrl + mouse wheel, or click the − and + buttons. Fit map frames the full layout."],
-            ["Edit", "Use the wall tool to draw on the 32 px grid. Use Select or click a layer to edit a wall, then drag its endpoints or windows."],
+            ["Edit", "Use the wall tool to draw on the 32 px grid. Select a wall, then drag its green line to move it, its endpoints to resize, or its windows to reposition them. Escape cancels a drag."],
             ["Preview", "Click Preview, then use the arrow keys to move the character. Wall collisions are enabled. Exit preview to resume editing."],
             ["Save", "Export JSON before closing or reloading. Your map is kept in memory, not saved automatically."],
           ].map(([label, description]) => (

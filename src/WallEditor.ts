@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { resolveWalls } from "./geometry";
+import { WallMap } from "./WallMap";
 import type { WallMapConfig, WallSpec, WindowSpec } from "./types";
 
 export type WallEditorTool = "select" | "wall";
@@ -36,6 +37,13 @@ interface WindowDrag {
   wall: WallSpec;
 }
 
+interface WallDrag {
+  index: number;
+  wall: WallSpec;
+  start: Phaser.Math.Vector2;
+  preview: WallSpec;
+}
+
 export class WallEditor {
   private configData: WallMapConfig;
   private selectedIndex: number | null;
@@ -50,6 +58,8 @@ export class WallEditor {
   private pointerPosition: Phaser.Math.Vector2 | null = null;
   private anchorDrag: AnchorDrag | null = null;
   private windowDrag: WindowDrag | null = null;
+  private wallDrag: WallDrag | null = null;
+  private wallPreview: WallMap | null = null;
 
   constructor(private readonly scene: Phaser.Scene, options: WallEditorOptions) {
     this.gridSize = options.gridSize ?? 32;
@@ -85,7 +95,7 @@ export class WallEditor {
   }
 
   get dragging(): boolean {
-    return Boolean(this.drawStart || this.anchorDrag || this.windowDrag);
+    return Boolean(this.drawStart || this.anchorDrag || this.windowDrag || this.wallDrag);
   }
 
   cancel(): void {
@@ -93,11 +103,15 @@ export class WallEditor {
     this.pointerPosition = null;
     this.anchorDrag = null;
     this.windowDrag = null;
+    this.wallDrag = null;
+    this.wallPreview?.destroy();
+    this.wallPreview = null;
     this.scene.input.setDefaultCursor("default");
     this.refresh();
   }
 
   destroy(): void {
+    this.cancel();
     this.scene.input.off("pointerdown", this.handlePointerDown, this);
     this.scene.input.off("pointermove", this.handlePointerMove, this);
     this.scene.input.off("pointerup", this.handlePointerUp, this);
@@ -132,6 +146,12 @@ export class WallEditor {
         this.scene.input.setDefaultCursor("grabbing");
         return;
       }
+      if (this.selectedIndex !== null && this.onSelectedLine(pointer.worldX, pointer.worldY)) {
+        const wall = this.configData.walls[this.selectedIndex];
+        this.wallDrag = { index: this.selectedIndex, wall, start: new Phaser.Math.Vector2(pointer.worldX, pointer.worldY), preview: wall };
+        this.scene.input.setDefaultCursor("grabbing");
+        return;
+      }
       this.callbacks.onSelectWall(this.findWall(pointer.worldX, pointer.worldY));
       return;
     }
@@ -143,6 +163,17 @@ export class WallEditor {
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
     if (!this.enabled) return;
     pointer.updateWorldPoint(this.camera);
+    if (this.wallDrag && pointer.isDown) {
+      const drag = this.wallDrag;
+      drag.preview = this.moveWall(drag, pointer.worldX, pointer.worldY);
+      this.wallPreview ??= new WallMap(this.scene, { presets: this.configData.presets, walls: [drag.wall] });
+      for (const container of this.wallPreview.containers) {
+        container.setPosition(drag.preview.x1 - drag.wall.x1, drag.preview.y1 - drag.wall.y1)
+          .setAlpha(0.65).setDepth(this.overlay.depth - 1);
+      }
+      this.refresh();
+      return;
+    }
     if (this.windowDrag && pointer.isDown) {
       this.windowDrag.wall = this.moveWindow(
         this.windowDrag.wall,
@@ -168,7 +199,8 @@ export class WallEditor {
         const wall = this.configData.walls[this.selectedIndex];
         this.scene.input.setDefaultCursor(wall.y1 === wall.y2 ? "ew-resize" : "ns-resize");
       } else {
-        this.scene.input.setDefaultCursor(this.findAnchor(pointer.worldX, pointer.worldY) ? "grab" : "default");
+        this.scene.input.setDefaultCursor(this.findAnchor(pointer.worldX, pointer.worldY)
+          || this.onSelectedLine(pointer.worldX, pointer.worldY) ? "grab" : "default");
       }
     }
     if (!this.drawStart || !pointer.isDown) return;
@@ -179,6 +211,15 @@ export class WallEditor {
   private handlePointerUp(pointer: Phaser.Input.Pointer): void {
     if (!this.enabled) return;
     pointer.updateWorldPoint(this.camera);
+    if (this.wallDrag) {
+      const drag = this.wallDrag;
+      const wall = this.moveWall(drag, pointer.worldX, pointer.worldY);
+      this.cancel();
+      if (wall.x1 !== drag.wall.x1 || wall.y1 !== drag.wall.y1) {
+        this.callbacks.onUpdateWall(drag.index, { x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 });
+      }
+      return;
+    }
     if (this.windowDrag) {
       const drag = this.windowDrag;
       const wall = this.moveWindow(drag.wall, drag.windowIndex, pointer.worldX, pointer.worldY);
@@ -232,7 +273,8 @@ export class WallEditor {
     if (!this.overlay) return;
     this.overlay.clear();
     if (!this.enabled) return;
-    const wall = this.windowDrag?.wall
+    const wall = this.wallDrag?.preview
+      ?? this.windowDrag?.wall
       ?? this.anchorDrag?.wall
       ?? (this.selectedIndex === null ? null : this.configData.walls[this.selectedIndex]);
     if (wall) {
@@ -268,6 +310,24 @@ export class WallEditor {
       }
     }
     return nearest?.index ?? null;
+  }
+
+  private onSelectedLine(x: number, y: number): boolean {
+    const wall = this.selectedIndex === null ? undefined : this.configData.walls[this.selectedIndex];
+    if (!wall) return false;
+    const horizontal = wall.y1 === wall.y2;
+    const along = horizontal ? x : y;
+    const start = horizontal ? wall.x1 : wall.y1;
+    const end = horizontal ? wall.x2 : wall.y2;
+    return along >= Math.min(start, end) && along <= Math.max(start, end)
+      && Math.abs(horizontal ? y - wall.y1 : x - wall.x1) <= 6 / this.camera.zoom;
+  }
+
+  private moveWall(drag: WallDrag, x: number, y: number): WallSpec {
+    const dx = Math.round((x - drag.start.x) / this.gridSize) * this.gridSize;
+    const dy = Math.round((y - drag.start.y) / this.gridSize) * this.gridSize;
+    const wall = drag.wall;
+    return { ...wall, x1: wall.x1 + dx, y1: wall.y1 + dy, x2: wall.x2 + dx, y2: wall.y2 + dy };
   }
 
   private findAnchor(x: number, y: number): "start" | "end" | null {

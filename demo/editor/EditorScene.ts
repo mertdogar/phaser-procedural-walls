@@ -47,6 +47,9 @@ export class EditorScene extends Phaser.Scene {
       onUpdateWall: (index, patch) => this.callbacks.onUpdateWall(index, patch),
     });
     this.cursors = this.input.keyboard?.createCursorKeys() ?? null;
+    const cancelEdit = () => this.editor.cancel();
+    this.input.keyboard?.on("keydown-ESC", cancelEdit);
+    this.events.once("shutdown", () => this.input.keyboard?.off("keydown-ESC", cancelEdit));
     this.input.on("pointerdown", this.handlePointerDown, this);
     this.input.on("pointermove", this.handlePointerMove, this);
     this.input.on("pointerup", this.handlePointerUp, this);

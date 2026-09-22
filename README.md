@@ -12,7 +12,7 @@ A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of 
 - One depth-sorted Container per wall; use `sprite.setDepth(sprite.y)` with automatic wall depths
 - Optional Arcade static bodies matching each wall's bottom footprint
 - Pure geometry module with unit tests, no Phaser needed to test it
-- Embeddable `WallEditor` for drawing, selection, endpoint handles, and window dragging in an existing Phaser scene
+- Embeddable `WallEditor` for drawing, selection, whole-wall movement, endpoint handles, and window dragging in an existing Phaser scene
 - Wallcraft editor prototype: draw walls, drag endpoints and windows, edit height and drawing order, and manage presets
 - Resizable layers and inspector panels with wall selection, duplication, deletion, and reordering
 - Full-pane canvas with origin axes, two-finger scrolling to pan, and pinching to zoom
@@ -128,6 +128,12 @@ Start a new agent session if needed, then ask, for example:
 scene with player collisions.” The skill is distributed in Git, not in the npm
 package. Its bundled references track the repository, including changes made
 after the original 0.2.0 release.
+
+## Unreleased
+
+Drag a selected wall's green centerline to move the entire segment with a
+grid-snapped preview. Endpoint resizing and window dragging remain available.
+Hosts can cancel through `WallEditor.cancel()`; Wallcraft binds this to Escape.
 
 ## 0.4.0 release notes
 

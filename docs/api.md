@@ -18,7 +18,7 @@ import { resolveWalls, cutRects } from "@mertdogar/phaser-procedural-walls/geome
 `new WallEditor(scene, options)` attaches editing interactions and a Graphics
 overlay to an existing, created Phaser scene. It needs neither Arcade Physics
 nor `WallMapPlugin` registration. Its runtime imports Phaser and the library's
-geometry code, not React or the standalone application's UI.
+geometry and renderer code, not React or the standalone application's UI.
 
 The host owns the `WallMapConfig`. Callbacks request edits; they don't mutate
 your config or rebuild your `WallMap`. This lets you accept changes locally or
@@ -35,7 +35,7 @@ Pass these fields when you construct the editor:
 | `tool` | Required | `"wall"` to draw or `"select"` to select and drag handles. |
 | `onAddWall(wall)` | Required | Requests adding a `WallSpec` after a draw gesture finishes. |
 | `onSelectWall(index)` | Required | Requests selecting a wall, or clearing selection with `null`. |
-| `onUpdateWall(index, patch)` | Required | Requests an endpoint or window-offset edit when a drag finishes. |
+| `onUpdateWall(index, patch)` | Required | Requests a whole-wall, endpoint, or window-offset edit when a drag finishes. |
 | `enabled` | `true` | Whether editing input and the overlay are active. |
 | `camera` | `scene.cameras.main` | Camera used to convert pointer coordinates and size handles. |
 | `gridSize` | `32` | Positive, finite world-unit snap step and minimum drawn wall length. |
@@ -58,7 +58,7 @@ Use these methods to connect your application's controls:
 | `setState({ config, selectedIndex, tool, enabled? })` | Supplies the current accepted state. A changed config reference, selection, tool, or enabled state cancels any unfinished gesture. Omitted `enabled` means `true`. |
 | `setNewWall({ preset?, thickness?, height? })` | Replaces new-wall defaults. Omitted thickness resets to `16`; omitted preset restores automatic selection. |
 | `cancel()` | Discards the unfinished gesture without an edit callback. Wire your Escape key to it. |
-| `dragging` | Whether a drawing, endpoint, or window gesture is in progress. |
+| `dragging` | Whether a drawing, whole-wall, endpoint, or window gesture is in progress. |
 | `refresh()` | Redraws the overlay, for example after changing camera zoom. |
 | `destroy()` | Removes the component's input and shutdown listeners and destroys its overlay. Called automatically on scene shutdown. |
 
@@ -68,6 +68,14 @@ pan, or zoom handlers. Coordinate your existing scene input so a wall gesture
 doesn't also pick furniture or move the camera. Disable the editor when another
 tool owns input. In a scene with multiple cameras, the host also controls which
 cameras render the overlay.
+
+In the current source (after 0.4.0), dragging the selected wall's green centerline
+moves the entire segment. Both endpoints receive the same grid-snapped delta,
+preserving length, orientation, off-grid alignment, and window offsets. Endpoint
+and window handles take priority; connected segments stay fixed. A translucent,
+non-colliding preview follows the drag without changing accepted data. Release
+requests one coordinate patch, or none if the wall returns to its original
+position. Cancellation, state changes, and destruction discard the preview.
 
 ### Accept edits locally
 
