@@ -1,3 +1,9 @@
+import openingImage0 from "./assets/openings/door-closed.png?inline";
+import openingImage1 from "./assets/openings/door-open.png?inline";
+import openingImage2 from "./assets/openings/door-side-closed.png?inline";
+import openingImage3 from "./assets/openings/door-side-open.png?inline";
+import openingImage4 from "./assets/openings/window.png?inline";
+import openingImage5 from "./assets/openings/window-side.png?inline";
 import brickFace from "./assets/textures/brick-face.png?inline";
 import woodFace from "./assets/textures/wood-face.png?inline";
 import stoneFace from "./assets/textures/stone-face.png?inline";
@@ -121,6 +127,14 @@ export const initialConfig: WallMapConfig = {
     },
   },
   textures: {
+    "door-closed": openingImage0,
+    "door-open": openingImage1,
+    "door-side-closed": openingImage2,
+    "door-side-open": openingImage3,
+    "window": openingImage4,
+    "window-side": openingImage5,
+
+
     "brick-face": brickFace,
     "wood-face": woodFace,
     "stone-face": stoneFace,
@@ -128,12 +142,12 @@ export const initialConfig: WallMapConfig = {
     "plaster-face": plasterFace,
   },
   walls: [
-    wall(128, 96, 832, 96, "exterior", [{ offset: 160, width: 96, height: 48, sillHeight: 16 }, { offset: 448, width: 96, height: 48, sillHeight: 16 }], 80),
+    wall(128, 96, 832, 96, "exterior", [{ offset: 160, width: 96, height: 48, sillHeight: 16, texture: "window", sideTexture: "window-side" }, { offset: 448, width: 96, height: 48, sillHeight: 16, texture: "window", sideTexture: "window-side" }], 80),
     wall(128, 96, 128, 544, "exterior", [], 80),
     wall(832, 96, 832, 544, "exterior", [], 80),
-    { ...wall(448, 96, 448, 544, "interior", [], 80), doors: [{ id: "hall-door", type: "hinged", height: 80, offset: 224, width: 96, swing: "right" }], },
-    { ...wall(448, 320, 832, 320, "accent", [], 80), doors: [{ id: "room-door", type: "sliding", height: 80, offset: 192, width: 96 }] },
-    wall(128, 544, 832, 544, "exterior", [{ offset: 404, width: 96, height: 48, sillHeight: 16 }], 80),
+    { ...wall(448, 96, 448, 544, "interior", [], 80), doors: [{ id: "hall-door", type: "hinged", height: 80, offset: 224, width: 96, swing: "right", texture: { closed: "door-closed", open: "door-open" }, sideTexture: { closed: "door-side-closed", open: "door-side-open" } }], },
+    { ...wall(448, 320, 832, 320, "accent", [], 80), doors: [{ id: "room-door", type: "sliding", height: 80, offset: 192, width: 96, texture: { closed: "door-closed", open: "door-open" } }] },
+    wall(128, 544, 832, 544, "exterior", [{ offset: 404, width: 96, height: 48, sillHeight: 16, texture: "window", sideTexture: "window-side" }], 80),
   ],
   collide: true,
 };

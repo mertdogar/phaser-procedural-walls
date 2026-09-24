@@ -77,9 +77,9 @@ export function resolveWalls(
     const lipPieces: Rect[] = [];
     const windows: Rect[] = [];
     const sills: Rect[] = [];
-    const add = (rect: Rect, kind: WallSurface["kind"], floorY: number, elevation = 0) => {
+    const add = (rect: Rect, kind: WallSurface["kind"], floorY: number, elevation = 0, texture?: string) => {
       if (rect.w <= 0 || rect.h <= 0) return;
-      surfaces.push({ rect, kind, floorY, depth: floorY + (w.depth === undefined ? 0 : w.depth - collider.y - collider.h) + elevation * 0.000001 });
+      surfaces.push({ rect, kind, floorY, ...(texture ? { texture } : {}), depth: floorY + (w.depth === undefined ? 0 : w.depth - collider.y - collider.h) + elevation * 0.000001 });
       if (kind === "body") bodyPieces.push(rect);
       if (kind === "lip") lipPieces.push(rect);
       if (kind === "window") windows.push(rect);
@@ -95,8 +95,9 @@ export function resolveWalls(
       }
       for (const win of w.windows ?? []) {
         const rect = { x: w.x1 + win.offset, y: collider.y + t - win.sillHeight - win.height, w: win.width, h: win.height };
-        add(rect, "window", collider.y + t);
-        const sillThickness = Math.min(preset.sillThickness ?? t, win.height);
+        if (win.texture && win.sillHeight + win.height === height) { rect.y -= t; rect.h += t; }
+        add(rect, "window", collider.y + t, 0, win.texture);
+        const sillThickness = win.texture ? 0 : Math.min(preset.sillThickness ?? t, win.height);
         add({ ...rect, y: rect.y + rect.h - sillThickness, h: sillThickness }, "sill", collider.y + t, 0.5);
       }
     } else {
@@ -111,7 +112,7 @@ export function resolveWalls(
       for (const win of w.windows ?? []) {
         const inset = preset.windowInset ?? DEFAULTS.windowInset;
         add({ x: w.x1 - half * inset, y: w.y1 + win.offset - win.sillHeight - win.height, w: t * inset, h: win.width + win.height },
-          "window", w.y1 + win.offset + win.width, win.sillHeight);
+          "window", w.y1 + win.offset + win.width, win.sillHeight, win.sideTexture);
       }
     }
     const colliderPieces = doors.reduce((pieces, door) => subtractRect(pieces, door.collider, horizontal), [collider]);
@@ -153,11 +154,22 @@ export function validateOpenings(walls: WallSpec[], presets: Record<string, Wall
       if (!door || typeof door.id !== "string" || !door.id.trim()) throw new Error("Every door needs a non-empty ID");
       if (ids.has(door.id)) throw new Error(`Duplicate door ID "${door.id}"`);
       ids.add(door.id);
+      for (const pair of [door.texture, door.sideTexture]) {
+        if (pair !== undefined && (!pair || typeof pair !== "object" || Array.isArray(pair)
+          || typeof pair.closed !== "string" || !pair.closed.trim() || typeof pair.open !== "string" || !pair.open.trim())) {
+          throw new Error(`Door "${door.id}" artwork requires both closed and open texture keys`);
+        }
+      }
       if (door.type !== "hinged" && door.type !== "sliding") throw new Error(`Door "${door.id}" has an invalid type`);
       if (door.open !== undefined && typeof door.open !== "boolean") throw new Error(`Door "${door.id}" open must be a boolean`);
       if (door.side !== undefined && door.side !== "start" && door.side !== "end") throw new Error(`Door "${door.id}" has an invalid side`);
       if (door.swing !== undefined && door.swing !== "left" && door.swing !== "right") throw new Error(`Door "${door.id}" has an invalid swing`);
 
+    }
+    for (const win of wall.windows ?? []) {
+      for (const key of [win?.texture, win?.sideTexture]) {
+        if (key !== undefined && (typeof key !== "string" || !key.trim())) throw new Error("Window artwork must be a non-empty texture key");
+      }
     }
     const height = wall.height ?? (presets[wall.preset]?.lipHeight ?? 0);
     if (!Number.isFinite(height) || height < 0) throw new Error("Wall height must be non-negative and finite");

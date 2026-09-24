@@ -136,3 +136,12 @@ it("moves every vertical surface by the same drawing-order override without chan
     expect(surface.depth - automatic.surfaces[index].depth).toBeCloseTo(300);
   }
 });
+
+it("extends top-reaching window artwork through the removed wall cap", () => {
+  const [resolved] = resolveWalls([wall(0, 0, 200, 0, {
+    windows: [{ ...window, texture: "glass" }],
+  })], presets);
+  expect(resolved.windows[0]).toEqual({ x: 40, y: -110, w: 60, h: 40 });
+  expect(resolved.sills).toHaveLength(0);
+  expect(resolved.colliderPieces).toEqual([resolved.collider]);
+});

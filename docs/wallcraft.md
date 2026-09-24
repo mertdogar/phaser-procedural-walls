@@ -157,6 +157,25 @@ use the existing undo/redo history, and JSON import/export retains all settings.
 Door fill and frame colors live in **Presets**. Moving or deleting a wall also
 moves or deletes its doors.
 
+## Assign door and window artwork
+
+Select a wall, expand **Opening artwork** under its door or window, and choose
+an existing image or upload a PNG, JPEG, or WebP (up to 5 MB). Click
+**Apply artwork** to save the assignment with the map's undo history.
+
+Front artwork is used on horizontal walls; side artwork is used on vertical
+walls. Doors require both closed and open images for each assigned orientation.
+Leave both images empty to keep the procedural door. Textured doors switch
+images and collision immediately; untextured doors keep their animation.
+Windows accept one image per orientation and replace the generated glass,
+frame, and sill while preserving image transparency.
+
+Artwork fits once instead of repeating. The full canvas, including transparent
+padding, determines its size. Side sprites retain their aspect ratio; door side
+artwork sits beside the wall on its swing side. Use a left-facing side pair with its frame at the right canvas
+edge; it mirrors automatically for the opposite swing. Assignments and uploaded images survive JSON export/import.
+Removing an assignment keeps the image available for reuse.
+
 ## Manage shared presets
 
 Open **Presets** in the top bar, then select a style.

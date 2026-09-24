@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { resolveWalls } from "./geometry";
-import type { DoorState, Rect, ResolvedDoor, ResolvedWall, WallMapConfig, WallPreset } from "./types";
+import type { DoorState, DoorTextures, Rect, ResolvedDoor, ResolvedWall, WallMapConfig, WallPreset } from "./types";
 
 interface RuntimeDoor {
   door: ResolvedDoor;
@@ -9,6 +9,7 @@ interface RuntimeDoor {
   graphics: Phaser.GameObjects.Graphics;
   container: Phaser.GameObjects.Container;
   blocker: Phaser.Physics.Arcade.StaticBody | null;
+  artwork?: { image: Phaser.GameObjects.Image; textures: DoorTextures };
   progress: number;
   open: boolean;
 }
@@ -29,7 +30,7 @@ export class WallMap {
   }
 
   setWalls(walls: WallMapConfig["walls"]): this {
-    resolveWalls(walls, this.config.presets);
+    this.validateTextures(resolveWalls(walls, this.config.presets));
     this.config = { ...this.config, walls };
     this.clear();
     this.build();
@@ -51,6 +52,7 @@ export class WallMap {
   openDoor(id: string): this {
     const door = this.getDoor(id);
     door.open = true;
+    if (door.artwork) { door.progress = 1; this.drawDoor(door); }
     if (door.blocker && door.progress === 1) door.blocker.enable = false;
     return this;
   }
@@ -58,6 +60,7 @@ export class WallMap {
   closeDoor(id: string): this {
     const door = this.getDoor(id);
     door.open = false;
+    if (door.artwork) { door.progress = 0; this.drawDoor(door); }
     if (door.blocker) door.blocker.enable = true;
     return this;
   }
@@ -99,6 +102,7 @@ export class WallMap {
   private build(): void {
     const { presets, walls, collide } = this.config;
     const resolved = resolveWalls(walls, presets);
+    this.validateTextures(resolved);
     if (collide) this.bodies = this.scene.physics.add.staticGroup();
     for (const wall of resolved) {
       this.containers.push(...this.drawWall(wall, presets[wall.spec.preset]));
@@ -113,6 +117,12 @@ export class WallMap {
           blocker: this.bodies ? this.addBody(door.collider) : null,
           progress: door.spec.open ? 1 : 0, open: door.spec.open ?? false,
         };
+        const textures = wall.horizontal ? door.spec.texture : door.spec.sideTexture;
+        if (textures) {
+          const image = this.scene.add.image(0, 0, runtime.open ? textures.open : textures.closed);
+          container.add(image);
+          runtime.artwork = { image, textures };
+        }
         if (runtime.blocker) runtime.blocker.enable = !runtime.open;
         this.doors.set(door.spec.id, runtime);
         this.drawDoor(runtime);
@@ -120,9 +130,33 @@ export class WallMap {
     }
   }
 
+  private validateTextures(walls: ResolvedWall[]): void {
+    for (const wall of walls) {
+      const keys = [
+        ...wall.surfaces.map((surface) => surface.texture),
+        ...wall.doors.flatMap(({ spec }) => {
+          const pair = wall.horizontal ? spec.texture : spec.sideTexture;
+          return [pair?.closed, pair?.open];
+        }),
+      ];
+      for (const key of keys) {
+        if (key && !this.scene.textures.exists(key)) throw new Error(`Missing opening texture "${key}"`);
+      }
+    }
+  }
+
   private drawWall(wall: ResolvedWall, preset: WallPreset): Phaser.GameObjects.Container[] {
-    return wall.surfaces.map(({ rect, kind, depth }) => {
+    return wall.surfaces.map(({ rect, kind, depth, texture }) => {
       const container = this.scene.add.container(0, 0);
+      if (texture) {
+        const image = this.scene.add.image(rect.x, rect.y, texture).setOrigin(0);
+        if (wall.horizontal) image.setDisplaySize(rect.w, rect.h);
+        else image.setPosition(wall.collider.x, rect.y).setOrigin(1, 0)
+          .setDisplaySize(rect.h * image.width / image.height, rect.h);
+        container.add(image);
+        container.setDepth(depth + 0.001);
+        return container;
+      }
       const g = this.scene.add.graphics();
       if (kind === "window") {
         g.fillStyle(preset.windowFill ?? 0x3d7f88, preset.windowAlpha ?? 0.5);
@@ -184,6 +218,21 @@ export class WallMap {
   private drawDoor(runtime: RuntimeDoor): void {
     const { door, wall, preset, progress, graphics: g, container } = runtime;
     const { spec, collider: r } = door;
+    if (runtime.artwork) {
+      const { image, textures } = runtime.artwork;
+      image.setTexture(runtime.open ? textures.open : textures.closed);
+      if (wall.horizontal) {
+        const height = spec.height + (spec.height === (wall.lip?.h ?? 0) ? r.h : 0);
+        image.setPosition(r.x, r.y + r.h).setOrigin(0, 1).setDisplaySize(spec.width, height);
+      } else {
+        const right = spec.type === "hinged" && spec.swing !== "right";
+        const height = spec.width + spec.height;
+        image.setFlipX(right).setPosition(right ? r.x + r.w : r.x, r.y + r.h).setOrigin(right ? 0 : 1, 1)
+          .setDisplaySize(height * image.width / image.height, height);
+      }
+      container.setDepth(r.y + r.h + (wall.spec.depth === undefined ? 0 : wall.depth - wall.collider.y - wall.collider.h) + 0.001);
+      return;
+    }
     const end = spec.side === "end";
     const horizontal = wall.horizontal;
     let x = horizontal ? r.x : r.x + r.w / 2;

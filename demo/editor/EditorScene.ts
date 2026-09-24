@@ -84,14 +84,20 @@ export class EditorScene extends Phaser.Scene {
   private async refreshWalls(): Promise<void> {
     const config = this.configData;
     try {
-      const keys = new Set(Object.values(config.presets).flatMap((preset) => [preset.texture, preset.lipTexture]).filter((key): key is string => Boolean(key)));
+      const keys = new Set([
+        ...Object.values(config.presets).flatMap((preset) => [preset.texture, preset.lipTexture]),
+        ...config.walls.flatMap((wall) => [
+          ...(wall.windows ?? []).flatMap((win) => [win.texture, win.sideTexture]),
+          ...(wall.doors ?? []).flatMap((door) => [door.texture?.closed, door.texture?.open, door.sideTexture?.closed, door.sideTexture?.open]),
+        ]),
+      ].filter((key): key is string => Boolean(key)));
       const images = await Promise.all([...keys].map(async (key) => {
         const source = config.textures?.[key];
         if (this.textures.exists(key) && (!source || this.textureSources.get(key) === source)) return null;
-        if (!source) throw new Error(`Texture "${key}" is missing. Upload its image in Presets.`);
+        if (!source) throw new Error(`Texture "${key}" is missing. Upload its image in the inspector or Presets.`);
         const image = new Image();
         image.src = source;
-        try { await image.decode(); } catch { throw new Error(`Could not load texture "${key}". Replace its image in Presets.`); }
+        try { await image.decode(); } catch { throw new Error(`Could not load texture "${key}". Replace its image in the inspector or Presets.`); }
         return { key, source, image };
       }));
       if (!this.sys.isActive() || config !== this.configData) return;

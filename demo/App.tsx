@@ -171,6 +171,7 @@ export default function App() {
     historyCount: history.length,
     futureCount: future.length,
     preview,
+    onConfigChange: commitConfig,
     onToolChange: setTool,
     onAddWall: addWall,
     onSelectWall: setSelectedIndex,
@@ -241,6 +242,7 @@ interface EditorProps {
   historyCount: number;
   futureCount: number;
   preview: boolean;
+  onConfigChange: (config: WallMapConfig) => void;
   onToolChange: (tool: EditorTool) => void;
   onAddWall: (wall: WallSpec) => void;
   onSelectWall: (index: number | null) => void;
@@ -509,8 +511,9 @@ function ToolPicker({ tool, onChange }: { tool: EditorTool; onChange: (tool: Edi
   );
 }
 
-function WallInspector({ config, selectedIndex, onUpdateWall }: {
+function WallInspector({ config, selectedIndex, onUpdateWall, onConfigChange }: {
   config: WallMapConfig;
+  onConfigChange: (config: WallMapConfig) => void;
   selectedIndex: number | null;
   onUpdateWall: (index: number, patch: Partial<WallSpec>) => void;
 }) {
@@ -651,6 +654,11 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
                     </Field>
                   ))}
                 </div>
+                <OpeningArtwork key={`${selectedIndex}-${windowIndex}-${window.texture}-${window.sideTexture}`}
+                  textures={config.textures ?? {}} value={{ front: window.texture, side: window.sideTexture }}
+                  onSave={(art, images) => onConfigChange({ ...config, textures: images, walls: config.walls.map((item, i) => i !== selectedIndex ? item : {
+                    ...item, windows: item.windows?.map((win, j) => j !== windowIndex ? win : { ...win, texture: art.front, sideTexture: art.side }),
+                  }) })} />
               </div>
             ))}
           </FieldGroup>
@@ -705,6 +713,14 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
               </Select>
               <FieldDescription>Looking from the wall's start toward its end.</FieldDescription>
             </Field>}
+            <OpeningArtwork key={`${selectedIndex}-${door.id}-${JSON.stringify([door.texture, door.sideTexture])}`} door
+              textures={config.textures ?? {}} value={{ frontClosed: door.texture?.closed, frontOpen: door.texture?.open, sideClosed: door.sideTexture?.closed, sideOpen: door.sideTexture?.open }}
+              onSave={(art, images) => onConfigChange({ ...config, textures: images, walls: config.walls.map((item, i) => i !== selectedIndex ? item : {
+                ...item, doors: item.doors?.map((entry, j) => j !== index ? entry : { ...entry,
+                  texture: art.frontClosed && art.frontOpen ? { closed: art.frontClosed, open: art.frontOpen } : undefined,
+                  sideTexture: art.sideClosed && art.sideOpen ? { closed: art.sideClosed, open: art.sideOpen } : undefined,
+                }),
+              }) })} />
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={door.open ?? false} onChange={(event) => updateDoor(index, { open: event.target.checked })} />Starts open</label>
             <Button variant="outline" size="sm" onClick={() => onUpdateWall(selectedIndex, { doors: wall.doors?.filter((_, i) => i !== index) })}>Remove door {index + 1}</Button>
           </FieldGroup>
@@ -712,6 +728,66 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
       </Field>
     </FieldGroup>
   );
+}
+
+async function readTexture(file: File): Promise<string> {
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Choose a PNG, JPEG, or WebP image.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("Choose an image smaller than 5 MB.");
+  const data = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Could not read the image."));
+    reader.readAsDataURL(file);
+  });
+  const image = new Image();
+  image.src = data;
+  await image.decode();
+  return data;
+}
+
+function OpeningArtwork({ door = false, textures, value, onSave }: {
+  door?: boolean;
+  textures: Record<string, string>;
+  value: Record<string, string | undefined>;
+  onSave: (value: Record<string, string | undefined>, textures: Record<string, string>) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [images, setImages] = useState(textures);
+  const [error, setError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fields = door ? [["frontClosed", "Front closed"], ["frontOpen", "Front open"], ["sideClosed", "Side closed"], ["sideOpen", "Side open"]]
+    : [["front", "Front artwork"], ["side", "Side artwork"]];
+  const complete = !door || (Boolean(draft.frontClosed) === Boolean(draft.frontOpen) && Boolean(draft.sideClosed) === Boolean(draft.sideOpen));
+  const upload = async (key: string, file?: File) => {
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const data = await readTexture(file);
+      const id = `wallcraft-${crypto.randomUUID()}`;
+      setImages((current) => ({ ...current, [id]: data }));
+      setDraft((current) => ({ ...current, [key]: id }));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not load the image.");
+    } finally { setUploading(false); }
+  };
+  return <details className="rounded border p-3">
+    <summary className="cursor-pointer text-sm font-medium">Opening artwork</summary>
+    <p className="my-3 text-xs text-muted-foreground">Front images apply to horizontal walls; side images apply to vertical walls. Leave an orientation empty for procedural rendering.{door && " Assign both closed and open images. Use a left-facing side pair; it mirrors for a right-facing swing."}</p>
+    <div className="space-y-3">
+      {fields.map(([key, label]) => <label key={key} className="block text-sm">{label}
+        <select aria-label={label} className="mt-1 block w-full rounded border bg-background p-2" value={draft[key] ?? ""} onChange={(e) => setDraft({ ...draft, [key]: e.target.value || undefined })}>
+          <option value="">None</option>
+          {Array.from(new Set([...Object.keys(images), ...(draft[key] ? [draft[key]] : [])])).map((id, i) => <option key={id} value={id}>{id.startsWith("wallcraft-") ? `Uploaded image ${i + 1}` : id}{!images[id] ? " (not loaded)" : ""}</option>)}
+        </select>
+        {draft[key] && images[draft[key]] && <img src={images[draft[key]]} alt={`${label} preview`} className="my-2 h-20 w-full rounded border object-contain" />}
+        <Input aria-label={`Upload ${label.toLowerCase()}`} type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading} onChange={(e) => { void upload(key, e.target.files?.[0]); e.target.value = ""; }} />
+      </label>)}
+      {!complete && <p role="status" className="text-xs">Assign both images in each door pair, or clear both.</p>}
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+      <Button size="sm" disabled={!complete || uploading} onClick={() => onSave(draft, { ...textures, ...images })}>Apply artwork</Button>
+    </div>
+  </details>;
 }
 
 function PresetManager({ config, onChange }: { config: WallMapConfig; onChange: (config: WallMapConfig) => void }) {
@@ -782,17 +858,7 @@ function PresetForm({ name, preset, names, usage, textures, onSave, onDelete }: 
     setUploadError("");
     setUploading(true);
     try {
-      if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Choose a PNG, JPEG, or WebP image.");
-      if (file.size > 5 * 1024 * 1024) throw new Error("Choose an image smaller than 5 MB.");
-      const data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error("Could not read the image."));
-        reader.readAsDataURL(file);
-      });
-      const image = new Image();
-      image.src = data;
-      await image.decode();
+      const data = await readTexture(file);
       const id = `wallcraft-${crypto.randomUUID()}`;
       setImages((current) => ({ ...current, [id]: data }));
       setDraft((current) => ({ ...current, [key]: id }));
@@ -938,5 +1004,5 @@ function canvasProps(props: EditorProps) {
 }
 
 function inspectorProps(props: EditorProps) {
-  return { config: props.config, selectedIndex: props.selectedIndex, onUpdateWall: props.onUpdateWall };
+  return { config: props.config, selectedIndex: props.selectedIndex, onUpdateWall: props.onUpdateWall, onConfigChange: props.onConfigChange };
 }

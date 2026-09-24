@@ -18,6 +18,11 @@ export interface WallPreset {
 export type DoorType = "hinged" | "sliding";
 export type DoorState = "closed" | "opening" | "open" | "closing";
 
+export interface DoorTextures {
+  closed: string;
+  open: string;
+}
+
 export interface DoorSpec {
   id: string;
   type: DoorType;
@@ -27,6 +32,8 @@ export interface DoorSpec {
   open?: boolean;
   side?: "start" | "end";
   swing?: "left" | "right";
+  texture?: DoorTextures;
+  sideTexture?: DoorTextures;
 }
 
 export interface ResolvedDoor {
@@ -39,6 +46,8 @@ export interface WindowSpec {
   width: number;
   height: number;
   sillHeight: number;
+  texture?: string;
+  sideTexture?: string;
 }
 
 export interface WallSpec {
@@ -71,6 +80,7 @@ export interface WallSurface {
   rect: Rect;
   kind: "body" | "lip" | "window" | "sill";
   floorY: number;
+  texture?: string;
   depth: number;
 }
 

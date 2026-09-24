@@ -151,9 +151,9 @@ const wallMap: WallMap = this.add.wallMap(config);
 
 ### Wallcraft export extension
 
-The editor exports the same fields plus an optional `textures: Record<string, string>`. Each key is referenced by a preset's `texture` or `lipTexture`; each value is an embedded PNG, JPEG, or WebP data URL. This field belongs to the editor format, not the library's `WallMapConfig` type. The library does not load these images automatically. Load them into Phaser before creating the wall map, as shown in the [Wallcraft guide](wallcraft.md#load-an-exported-map-in-phaser).
+The editor exports the same fields plus an optional `textures: Record<string, string>`. Each key is referenced by a preset or opening texture field; each value is an embedded PNG, JPEG, or WebP data URL. This field belongs to the editor format, not the library's `WallMapConfig` type. The library does not load these images automatically. Load them into Phaser before creating the wall map, as shown in the [Wallcraft guide](wallcraft.md#load-an-exported-map-in-phaser).
 
-The upload control accepts files up to 5 MB each. Images repeat at their original size; the editor has no tile scaling or spritesheet-frame controls. Removing a texture assignment switches that surface to its color, but the uploaded image remains in the map's image collection and export.
+The upload control accepts files up to 5 MB each. Wall textures repeat at their original size; opening artwork is fitted once; the editor has no tile scaling or spritesheet-frame controls. Removing a texture assignment switches that surface to its color, but the uploaded image remains in the map's image collection and export.
 
 ### WallSpec
 
@@ -169,12 +169,16 @@ The upload control accepts files up to 5 MB each. Images repeat at their origina
 
 ### WindowSpec
 
+Window artwork is optional and assigned per opening.
+
 | field | type | description |
 | --- | --- | --- |
 | `offset` | `number` | Distance in world units from the wall's `(x1, y1)` end to the window's near edge, measured before any endpoint normalization. |
 | `width` | `number` | Required positive window width along the wall. |
 | `height` | `number` | Required positive, finite window height. |
 | `sillHeight` | `number` | Required nonnegative distance from the floor to the window bottom. |
+| `texture` | `string` | Optional horizontal-wall artwork key; replaces glass, frame, and sill. |
+| `sideTexture` | `string` | Optional vertical-wall artwork key; otherwise uses procedural glass. |
 
 ### DoorSpec
 
@@ -194,8 +198,24 @@ windows above doors are allowed. Dimensions remain fixed when wall height change
 | `open` | `boolean` | `false` | Authored starting state, restored on rebuild. |
 | `side` | `"start" \| "end"` | `"start"` | Hinge end or sliding retraction side, relative to authored wall direction. |
 | `swing` | `"left" \| "right"` | `"left"` | Hinged swing side when looking from `(x1, y1)` toward `(x2, y2)`. Ignored for sliding doors. |
+| `texture` | `DoorTextures` | None | Horizontal-wall artwork: `{ closed: string, open: string }`. Both keys are required. |
+| `sideTexture` | `DoorTextures` | None | Vertical-wall artwork pair, assigned independently of front artwork. |
 
-Hinged doors rotate 90 degrees. Sliding doors disappear into the chosen side,
+Load all assigned keys into Phaser before creating the map. Missing images throw.
+Textured doors switch their image and collision immediately in `openDoor()` and
+`closeDoor()`. An orientation without a pair keeps the procedural rendering.
+Artwork preserves alpha and is drawn once, without tint, outlines, or tiling.
+Horizontal artwork fits the configured width and height, including the top
+thickness when the opening reaches the wall top. Vertical artwork uses
+its aspect ratio and a projected height of opening width plus opening height;
+it sits beside the wall on the door's swing side (west for sliding doors).
+Author side door images facing west, with their frame at the right canvas edge;
+they mirror automatically when the door swings east.
+Vertical window artwork sits west of the wall at its configured elevation.
+The entire image canvas, including transparent padding, participates in fitting.
+Prepare sprites with consistent framing for open and closed states.
+
+Untextured hinged doors rotate 90 degrees. Sliding doors disappear into the chosen side,
 clipped to the doorway; they need no adjacent pocket space. Both take 250 ms for
 a full transition. Reversing direction preserves the current position and speed.
 For an eastbound wall, left swings north; for a southbound wall, left swings east.

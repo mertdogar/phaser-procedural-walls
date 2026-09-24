@@ -7,6 +7,7 @@ A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of 
 ## Features
 
 - Axis-aligned wall segments with automatic corner and T-junction filling
+- Per-opening window artwork and front/side door sprites with open/closed states
 - Per-wall style presets: flat colors or tiled textures for the wall top and its face
 - Windows cut into the face with translucent glass and an opaque sill
 - Functional hinged and sliding doors with IDs, animation, and doorway collision

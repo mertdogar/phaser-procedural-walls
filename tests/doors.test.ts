@@ -14,13 +14,22 @@ function setup(type: DoorType = "hinged", open = false, collide = true) {
     drawings.push(g);
     return g;
   };
+  const images: Record<string, ReturnType<typeof vi.fn>>[] = [];
+  const image = (_x: number, _y: number, key: string) => {
+    const item = { width: 32, height: 96 } as unknown as Record<string, ReturnType<typeof vi.fn>>;
+    for (const method of ["setTexture", "setPosition", "setOrigin", "setDisplaySize", "setFlipX", "destroy"]) item[method] = vi.fn().mockReturnValue(item);
+    item.setTexture(key);
+    images.push(item);
+    return item;
+  };
   const bodies: { enable: boolean }[] = [];
   const group = { add: vi.fn(), destroy: vi.fn() };
   const events = { on: vi.fn(), once: vi.fn(), off: vi.fn() };
   const scene = {
     events,
+    textures: { exists: (key: string) => key !== "missing" },
     add: {
-      graphics,
+      graphics, image,
       container: () => ({ add: vi.fn(), setDepth: vi.fn(), destroy: vi.fn() }),
       zone: () => ({ body: null }),
     },
@@ -37,7 +46,7 @@ function setup(type: DoorType = "hinged", open = false, collide = true) {
     const [, callback, context] = events.on.mock.calls.find(([name]) => name === "update")!;
     callback.call(context, 0, delta);
   };
-  return { map, config, tick, bodies, group, events, drawings };
+  return { map, config, tick, bodies, group, events, drawings, images };
 }
 
 describe.each(["hinged", "sliding"] as const)("%s door runtime", (type) => {
@@ -189,4 +198,82 @@ it.each(["left", "right"] as const)("exposes a short vertical door on its %s swi
   map.closeDoor("entry");
   tick(250);
   expect(Math.min(...top().map((p) => p.x))).toBeCloseTo(hingeX - 4);
+});
+
+
+it.each([false, true])("switches textured doors and collision immediately (vertical=%s)", (vertical) => {
+  const { map, config, images, bodies, tick } = setup();
+  const textures = { closed: "closed", open: "open" };
+  map.setWalls([{ ...config.walls[0], x2: vertical ? 0 : 200, y2: vertical ? 200 : 0,
+    height: 100, doors: [{ id: "art", type: "hinged", offset: 50, width: 60, height: 80, swing: "right",
+      ...(vertical ? { sideTexture: textures } : { texture: textures }) }],
+  }]);
+  const image = images.at(-1)!;
+  expect(image.setDisplaySize).toHaveBeenLastCalledWith(vertical ? 140 / 3 : 60, vertical ? 140 : 80);
+  expect(image.setPosition).toHaveBeenLastCalledWith(vertical ? -10 : 50, vertical ? 110 : 10);
+  expect(map.getDoorState("art")).toBe("closed");
+  map.openDoor("art");
+  expect(image.setTexture).toHaveBeenLastCalledWith("open");
+  expect(map.getDoorState("art")).toBe("open");
+  expect(bodies.at(-1)!.enable).toBe(false);
+  map.closeDoor("art");
+  expect(image.setTexture).toHaveBeenLastCalledWith("closed");
+  expect(map.getDoorState("art")).toBe("closed");
+  expect(bodies.at(-1)!.enable).toBe(true);
+  tick(125);
+  expect(map.getDoorState("art")).toBe("closed");
+});
+
+it("keeps the vertical procedural animation when only front artwork is assigned", () => {
+  const { map, config, images, tick } = setup();
+  map.setWalls([{ ...config.walls[0], x2: 0, y2: 200, doors: [{ ...config.walls[0].doors![0], texture: { closed: "closed", open: "open" } }] }]);
+  expect(images).toHaveLength(0);
+  map.openDoor("entry");
+  tick(100);
+  expect(map.getDoorState("entry")).toBe("opening");
+});
+
+it("round-trips embedded opening artwork and rejects incomplete pairs", () => {
+  const { config } = setup();
+  config.walls[0].doors![0].texture = { closed: "closed", open: "open" };
+  const embedded = { ...config, textures: { closed: "data:image/png;base64,AAAA", open: "data:image/png;base64,BBBB" } };
+  expect(parseWallConfig(serializeWallConfig(embedded))).toEqual(embedded);
+  const invalid = JSON.parse(serializeWallConfig(embedded));
+  delete invalid.walls[0].doors[0].texture.open;
+  expect(() => parseWallConfig(JSON.stringify(invalid))).toThrow(/both closed and open/);
+});
+
+it.each([false, true])("renders window artwork without procedural glass or sill (vertical=%s)", (vertical) => {
+  const { map, config, images, drawings } = setup();
+  const count = drawings.length;
+  map.setWalls([{ ...config.walls[0], doors: [], x2: vertical ? 0 : 200, y2: vertical ? 200 : 0,
+    height: 100, windows: [{ offset: 50, width: 60, height: 40, sillHeight: 20, texture: "window", sideTexture: "side-window" }],
+  }]);
+  expect(images).toHaveLength(1);
+  expect(images[0].setTexture).toHaveBeenCalledWith(vertical ? "side-window" : "window");
+  expect(images[0].setDisplaySize).toHaveBeenCalledWith(vertical ? 100 / 3 : 60, vertical ? 100 : 40);
+  expect(drawings.slice(count).flatMap((g) => g.fillStyle.mock.calls).some((call) => call[0] === 0x3d7f88)).toBe(false);
+});
+
+
+it("rejects missing opening textures before destroying the current map", () => {
+  const { map, config } = setup();
+  expect(() => map.setWalls([{ ...config.walls[0], doors: [{ ...config.walls[0].doors![0], texture: { closed: "closed", open: "missing" } }] }])).toThrow(/Missing opening texture/);
+  expect(map.getDoorState("entry")).toBe("closed");
+});
+
+
+it("fits full-height door artwork across the top thickness down to the floor", () => {
+  const { map, config, images } = setup();
+  map.setWalls([{ ...config.walls[0], doors: [{ ...config.walls[0].doors![0], texture: { closed: "closed", open: "open" } }] }]);
+  expect(images[0].setPosition).toHaveBeenLastCalledWith(50, 10);
+  expect(images[0].setDisplaySize).toHaveBeenLastCalledWith(80, 44);
+  map.openDoor("entry");
+  expect(images[0].setDisplaySize).toHaveBeenLastCalledWith(80, 44);
+});
+
+it.each(["left", "right"] as const)("mirrors side artwork only for the %s swing", (swing) => {
+  const { map, config, images } = setup();
+  map.setWalls([{ ...config.walls[0], x2: 0, y2: 200, doors: [{ ...config.walls[0].doors![0], swing, sideTexture: { closed: "closed", open: "open" } }] }]);
+  expect(images[0].setFlipX).toHaveBeenCalledWith(swing === "left");
 });
