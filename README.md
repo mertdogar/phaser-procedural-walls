@@ -1,30 +1,31 @@
 # @mertdogar/phaser-procedural-walls
 
-A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of data. You describe wall centerlines and window positions; the plugin draws thick wall bodies, a front face, see-through windows with sills, and optional Arcade Physics colliders, and it depth-sorts each wall so characters walk in front of and behind walls correctly.
+A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of data. You describe floor centerlines, dimensions, and openings; the plugin draws thick wall bodies, a front face, see-through windows with sills, and optional Arcade Physics colliders, and it depth-sorts wall surfaces so characters walk in front of and behind walls correctly.
 
 ![Wallcraft editor with a selected wall, layers panel, and docked inspector](docs/images/wallcraft-editor.png)
 
-## Features
+## What you can build
 
-- Axis-aligned wall segments with automatic corner and T-junction filling
-- Per-opening window artwork and front/side door sprites with open/closed states
-- Per-wall style presets: flat colors or tiled textures for the wall top and its face
-- Windows cut into the face with translucent glass and an opaque sill
-- Functional hinged and sliding doors with IDs, animation, and doorway collision
-- One depth-sorted Container per wall; use `sprite.setDepth(sprite.y)` with automatic wall depths
-- Optional Arcade static bodies matching each wall's bottom footprint
-- Pure geometry module with unit tests, no Phaser needed to test it
-- Embeddable `WallEditor` for drawing, selection, whole-wall movement, endpoint handles, and window dragging in an existing Phaser scene
-- Wallcraft editor prototype: draw walls, drag endpoints and windows, edit height and drawing order, and manage presets
-- Resizable layers and inspector panels with wall selection, duplication, deletion, and reordering
-- Full-pane canvas with origin axes, two-finger scrolling to pan, and pinching to zoom
-- Map preferences for applying height or thickness to all existing walls
-- Upload tiled textures, export/import maps with embedded images, and test collisions in a playable preview
+- Axis-aligned rooms with connected corners and T-junctions.
+- Walls that grow upward from a fixed floor footprint.
+- Windows with independent width, height, and elevation above the floor.
+- Hinged or sliding doors with stable IDs and optional Arcade collision.
+- Tiled wall materials and fitted door/window artwork, including vertical views.
+- Maps authored visually in Wallcraft or directly with TypeScript and JSON.
+- Editing interactions embedded in an existing Phaser scene with `WallEditor`.
 
-Custom wall drawing orders need matching character-depth handling in your game.
-Wallcraft preview handles player occlusion against wall footprints, but this
-editor-only logic is not included in JSON exports. See the
-[depth convention](docs/api.md#depth-convention).
+The renderer sorts individual wall surfaces and door containers. With automatic
+wall depths, sort characters by their feet using `sprite.setDepth(sprite.y)`.
+Custom wall depths require matching character sorting in your game; Wallcraft's
+preview sorting is editor-only.
+
+## Version compatibility
+
+These docs describe the current repository. The floor-based coordinate model,
+explicit opening dimensions, and opening artwork are changes after 0.4.1.
+Check your installed package's types before using these fields; this repository's
+version number alone does not establish that the changes are published on npm.
+Use the source checkout for the behavior described here.
 
 ## Try Wallcraft
 
@@ -100,6 +101,7 @@ player.setDepth(player.y);
 
 - [Quick start](docs/quickstart.md). Build a walkable room with a window from an empty folder.
 - [Wallcraft guide](docs/wallcraft.md). Edit maps, manage presets and textures, test collisions, and export to Phaser.
+- [Door guide](docs/doors.md). Add doors, assign artwork, and control passage from your game.
 - [API reference](docs/api.md). Every config field, preset option, and method.
 - [How it works](docs/how-it-works.md). Corner filling, depth sorting, collision footprints, and window holes.
 
@@ -131,72 +133,30 @@ scene with player collisions.” The skill is distributed in Git, not in the npm
 package. Its bundled references track the repository, including changes made
 after the original 0.2.0 release.
 
-## 0.4.1 release notes
+## Upgrade older maps
 
-Drag a selected wall's green centerline to move the entire segment with a
-grid-snapped preview. Endpoint resizing and window dragging remain available.
-Hosts can cancel through `WallEditor.cancel()`; Wallcraft binds this to Escape.
+The current model uses floor-footprint centerlines. Wall height projects upward
+and no longer shifts collision. There is no legacy rendering mode.
 
-## 0.4.0 release notes
+1. Provide `height` for every door and `height` plus `sillHeight` for every window.
+2. Rename preset `sillHeight` to `sillThickness`. A window's `sillHeight` means
+   distance from the floor to its bottom; preset `sillThickness` is decoration.
+3. Review coordinates. To preserve an old wall's floor position, add its old
+   effective height to both endpoint y coordinates. Review connected walls with
+   different heights individually. Keeping coordinates unchanged treats them as
+   the intended floor plan and raises the walls above it.
+4. Check that openings fit the wall length and height. Invalid openings produce
+   errors rather than resizing themselves.
 
-Version 0.4.0 exports `WallEditor`, extracted from Wallcraft's canvas interactions.
-Attach it to your existing Phaser scene to draw snapped walls, select walls,
-drag endpoints, and move windows. Your application owns data, UI, rendering,
-camera navigation, and accepting or refusing edits.
-
-The standalone editor now uses this component. Open `/?embedded` in the demo
-or packaged editor for a small Phaser-only example with property controls.
-See the [embedding guide](docs/wallcraft.md#embed-the-wall-editor-in-your-game)
-and [API reference](docs/api.md#walleditor). Existing renderer and geometry APIs
-are unchanged.
-
-## Floor-based coordinates (unreleased)
-
-Wall endpoints now describe the centerline on the floor. Height grows upward
-without moving collisions or junctions. This replaces the previous convention;
-there is no legacy rendering mode.
-
-Existing JSON must provide `height` for every door, and `height` plus `sillHeight`
-for every window. Rename preset `sillHeight` to `sillThickness`; the window field
-now means elevation above the floor. Missing or invalid dimensions produce errors.
-To preserve an old wall's floor position, add its old effective height to both
-endpoint y coordinates, then review junctions where neighboring heights differ.
-Leave coordinates unchanged to keep the authored floor plan and raise its walls.
-
-The historical release notes below describe earlier versions.
-
-## 0.3.0 release notes
-
-Version 0.3.0 adds large-map navigation, resizable layers and inspector panels,
-bulk height and thickness settings, window-width controls, and a Help dialog.
-Select and Draw now live in the top bar. Preview handles player occlusion with
-custom wall drawing orders. Documentation, screenshots, and the repository's
-installable agent skill have also been updated.
-
-### Upgrade from 0.2.0
-
-Review existing maps before upgrading your game:
-
-- **Collision footprints changed.** Colliders now match the wall body's bottom
-  footprint, shifted south by its effective face height. Recheck spawn points,
-  wall junctions, and doorways. Use matching face heights around aligned gaps.
-- **Default window sills changed.** When `sillHeight` is omitted, it follows wall
-  thickness, clipped to the opening height. Explicit values remain unchanged;
-  set a value to preserve an older look, or use zero to disable sills.
-- **Preview sorting is editor-only.** Exported custom `depth` values remain
-  absolute drawing orders. Consumer games still need character sorting that
-  accounts for these values; `setDepth(player.y)` assumes automatic wall depths.
-
-Launch this specific version with
-`npx @mertdogar/phaser-procedural-walls@0.3.0 editor` or
-`pnpx @mertdogar/phaser-procedural-walls@0.3.0 editor`.
+Opening artwork is optional. Maps without it keep procedural doors and windows.
+The [API reference](docs/api.md) defines the current fields and defaults.
 
 ## Develop
 
 ```bash
 pnpm install
 pnpm dev     # wall editor prototype: draw walls and import/export WallMapConfig JSON
-pnpm test    # geometry and editor interaction tests
+pnpm test    # geometry, door runtime, and editor interaction tests
 pnpm typecheck
 pnpm lint
 pnpm build   # library in dist/ and bundled app in dist/editor/

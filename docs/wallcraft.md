@@ -1,32 +1,9 @@
 # Use Wallcraft
 
-Wallcraft is the repository's React, Vite, shadcn, and Phaser editor prototype. Use it to build an axis-aligned wall map and try it with a character before exporting it to your game.
+Wallcraft is the repository's in-memory visual wall editor. Use it to build an axis-aligned wall map and try it with a character before exporting it to your game.
 
 This guide describes the current repository. A published npm release may lag
 behind these controls and collision changes; run from source to use this version.
-
-## Embed the wall editor in your game
-
-Starting with 0.4.0, you can import `WallEditor` from the package root and attach
-it to an existing Phaser scene. Wallcraft uses this same library component for
-its canvas interactions. It draws editing handles and emits callbacks for new
-walls, selection, endpoint changes, and window movement.
-
-Your game owns the wall data, renderer, camera, and controls. Update the data
-from callbacks, then pass the accepted state back with `setState`. For a networked
-game, wait for your server's accepted state. Deletion, preset selection, numeric
-properties, and adding or removing windows are ordinary edits to `WallMapConfig`
-from your own UI. The component does not create React panels or another game.
-
-Run `pnpm dev` and open `/?embedded` for a small Phaser-only example. You can also
-append `?embedded` to the packaged editor's URL. Press D to draw, S to select,
-Delete to remove a selected wall, and Escape to cancel a drag. P, T, H, and W
-change its preset, thickness, height, and window. E disables or enables editing.
-
-See [EmbeddedEditorScene.ts](../demo/editor/EmbeddedEditorScene.ts) for the
-complete runnable example and the [WallEditor API](api.md#walleditor) for the
-callback contract and lifecycle. The full Wallcraft application demonstrates a
-React host in [EditorScene.ts](../demo/editor/EditorScene.ts).
 
 ## Start the editor
 
@@ -88,16 +65,15 @@ camera follows the player while moving.
 Use the **Help** question-mark button in the top bar for navigation, editing,
 preview, and saving instructions. The GitHub button opens the project repository.
 
-The editor and preview screenshots use the sample map with all wall heights set
-to 80 px through **Map preferences**. The inspector is scrolled to the window
-controls; in preview, the player is partially hidden behind the interior wall.
+The editor and preview screenshots show the sample floor plan. Older material
+examples illustrate tiled wall surfaces rather than the current opening artwork.
 
 New walls use `interior` when that preset exists, otherwise the first available preset. Choose a different preset in the selected wall's inspector. **Delete** removes the selected wall; **Reset** restores the entire sample map, including its presets.
 
-Undo/redo covers adding, duplicating, deleting, and reordering walls, bulk
-dimension updates, reset, imports, and saved preset changes. Direct inspector
-edits and dragging are not currently recorded in that history. Export checkpoints
-before extensive editing.
+Undo/redo covers accepted inspector edits, completed drags, artwork assignments,
+adding, duplicating, deleting, and reordering walls, bulk dimension updates,
+reset, imports, and saved preset changes. Unsaved image and preset form changes
+are drafts. Preview door interactions do not change the authored map.
 
 ## Manage wall layers
 
@@ -136,9 +112,11 @@ Neither action changes presets or the defaults for future walls.
 
 Select a wall and click **Add** in its Windows section. Drag a window along the selected wall, or enter its offset in the inspector. Dragging snaps to the grid; the offset measures from the wall's first authored endpoint to the near edge of the opening.
 
-Set **Width (px)** beside **Offset (px)** for each window in the inspector.
-Changes appear immediately. Width is at least 1 pixel and can't extend past
-the wall's end from the current offset.
+Set **Width (px)**, **Height (px)**, and **Above floor (px)** for each window.
+Above floor positions its bottom edge and corresponds to `sillHeight` in JSON.
+Changes appear immediately. Width and height must be positive, the opening must
+fit the wall, and it must not overlap another opening in both position and
+elevation. You can stack windows or place a window above a door.
 
 Windows are visual openings and do not create walkable gaps. Add a door for a
 passage that can open and close.
@@ -147,7 +125,7 @@ passage that can open and close.
 
 Select a wall and click **Add door** in the inspector. The editor inserts a
 64 px hinged door in the first available gap. If no gap fits, make room by editing
-existing openings. Set the ID, type, offset, width, hinge or retraction side,
+existing openings. Set the ID, type, offset, width, height, hinge or retraction side,
 swing direction, and **Starts open** in the inspector. Drag doors along the wall
 using the same grid snapping as windows. Use **Remove door** to delete one.
 
@@ -172,8 +150,11 @@ frame, and sill while preserving image transparency.
 
 Artwork fits once instead of repeating. The full canvas, including transparent
 padding, determines its size. Side sprites retain their aspect ratio; door side
-artwork sits beside the wall on its swing side. Use a left-facing side pair with its frame at the right canvas
-edge; it mirrors automatically for the opposite swing. Assignments and uploaded images survive JSON export/import.
+artwork sits beside the wall on its swing side. Use a left-facing side pair with
+its frame at the right canvas edge; it mirrors automatically for the opposite
+swing. Full-height front artwork also covers the wall top thickness. Match the
+canvas dimensions and frame position across door states. Assignments and uploaded
+images survive JSON export/import.
 Removing an assignment keeps the image available for reuse.
 
 ## Manage shared presets
@@ -232,7 +213,7 @@ for the exact model. Preview hides the layers and inspector to use the full canv
 
 **Export JSON** downloads `wall-map.json`. **Import** accepts a JSON file or pasted text; the text box initially contains the current map, which is also useful for inspecting its data. Click **Import map** to apply it.
 
-Exports contain `walls`, `presets`, optional `collide`, and optional `textures`. Texture values are embedded image data URLs, so the map can be reimported into Wallcraft without the original image files. External Phaser texture keys without embedded images must be replaced with an upload or Solid color in this editor.
+Exports contain `walls`, `presets`, optional `collide`, and optional `textures`. Texture values are embedded image data URLs, so the map can be reimported into Wallcraft without the original image files. For keys without embedded images, upload the missing image or remove its assignment (Solid color for presets, None for opening artwork).
 
 ## Load an exported map in Phaser
 
@@ -263,8 +244,31 @@ class Office extends Phaser.Scene {
 ```
 
 The Phaser loader finishes the queued images before `create` runs. The library
-ignores the editor's `textures` field; its preset texture keys resolve against
+ignores the editor's `textures` field; preset and opening texture keys resolve against
 Phaser's Texture Manager. Your character still needs a collider and, with
 automatic wall depths, `setDepth(player.y)` each frame. Custom depths need
 additional character sorting; see the [depth convention](api.md#depth-convention)
 and [quick start](quickstart.md#4-add-a-character).
+
+## Embed the wall editor in your game
+
+Starting with 0.4.0, you can import `WallEditor` from the package root and attach
+it to an existing Phaser scene. Wallcraft uses this same library component for
+its canvas interactions. It draws editing handles and emits callbacks for new
+walls, selection, endpoint changes, and window movement.
+
+Your game owns the wall data, renderer, camera, and controls. Update the data
+from callbacks, then pass the accepted state back with `setState`. For a networked
+game, wait for your server's accepted state. Deletion, preset selection, numeric
+properties, and adding or removing windows are ordinary edits to `WallMapConfig`
+from your own UI. The component does not create React panels or another game.
+
+Run `pnpm dev` and open `/?embedded` for a small Phaser-only example. You can also
+append `?embedded` to the packaged editor's URL. Press D to draw, S to select,
+Delete to remove a selected wall, and Escape to cancel a drag. P, T, H, and W
+change its preset, thickness, height, and window. E disables or enables editing.
+
+See [EmbeddedEditorScene.ts](../demo/editor/EmbeddedEditorScene.ts) for the
+complete runnable example and the [WallEditor API](api.md#walleditor) for the
+callback contract and lifecycle. The full Wallcraft application demonstrates a
+React host in [EditorScene.ts](../demo/editor/EditorScene.ts).

@@ -6,7 +6,9 @@ You will end up with a solid-color room and a simple generated character. For a 
 
 ## Before you begin
 
-You need Node 20 or newer and pnpm. Any editor works.
+You need Node 20 or newer and pnpm. Any editor works. This tutorial describes
+the current repository API; check your installed package types against the
+[compatibility note](../README.md#version-compatibility).
 
 ## 1. Create the project
 
@@ -56,7 +58,8 @@ Run `pnpm vite` and open the URL it prints. You should see a green page. Keep it
 
 ## 3. Draw the room
 
-Walls are described by their centerline. Replace the `create` method with four walls forming a 400 by 300 room. The north and south walls each get a window.
+Walls are described by their floor-footprint centerline. Height grows upward
+without moving that footprint. Replace the `create` method with four walls forming a 400 by 300 room. The north and south walls each get a window.
 
 ```ts
 create() {
@@ -131,15 +134,18 @@ update() {
 }
 ```
 
-The last line is the only thing the plugin asks of your characters. Each wall already has its depth set to its south edge, so a sprite whose feet are below that edge draws on top of the wall, and one above it draws underneath.
+With automatic depth, each wall surface sorts by its floor south edge. The last
+line sorts your character by its feet: above that edge it draws behind the
+surface, and below it the character draws in front. Leave explicit wall `depth`
+values unset for this tutorial.
 
 ## 6. Try it
 
-Walk down toward the south wall. The character keeps going into the wall zone and disappears behind the brick face, then stops at the bottom of the face. Walk left until you are behind the window: you can see the character through the glass.
+Walk down toward the south wall. The character keeps going into the wall zone and disappears behind the brick face, then stops at the bottom of the face. Walk right until you are behind the window: you can see the character through the glass.
 
 ![Player visible through the window](images/player-behind-window.jpg)
 
-The room is closed, so you cannot walk through its walls or windows. To compare the outside view, temporarily change the player spawn to `(400, 480)`, save, then push up against the south wall. The character stops at the face and is drawn in front of it. To create a doorway, split a wall into two segments with a gap.
+The room is closed, so you cannot walk through its walls or windows. To compare the outside view, temporarily change the player spawn to `(400, 480)`, save, then push up against the south wall. The character stops at the face and is drawn in front of it. To add a functional doorway, follow the [door guide](doors.md).
 
 ## Where to go next
 

@@ -2,8 +2,7 @@
 name: phaser-procedural-walls
 description: >-
   Use when building or integrating maps with @mertdogar/phaser-procedural-walls,
-  loading Wallcraft JSON exports into Phaser, configuring wall presets or tiled
-  textures, or fixing this library's windows, wall height, drawing depth, and
+  loading Wallcraft JSON exports into Phaser, configuring wall presets, tiled textures, or door/window artwork, or fixing this library's windows, wall height, drawing depth, and
   Arcade collisions. Also use for server-side geometry from this package.
   Covers library consumers and Wallcraft workflows, not library maintenance
   or unrelated Phaser development.
@@ -54,15 +53,18 @@ These details prevent integrations that compile but render or collide wrongly.
   `collide: true` creates bodies but doesn't attach a player collider for you.
 - A map rebuild replaces its static group. Reconnect any player collider after
   `setWalls()` or `redraw()`; don't retain the old group.
-- Preset textures are already-loaded Phaser texture keys, not URLs. Wallcraft's
+- Preset and opening textures are already-loaded Phaser texture keys, not URLs. Wallcraft's
   extra `textures` dictionary needs explicit loading before map construction.
+- Opening artwork is fitted once. Doors use complete front/side closed-open pairs;
+  textured states switch immediately, untextured states animate. See the API
+  reference for side-image framing and mirroring.
 - Use the `/geometry` entry point in Node or other non-browser code. The root
   entry imports Phaser. `cutRects` isn't exported from the root.
 
 ## Scope and handoff
 
 Give concrete consumer-facing examples. Don't invent diagonal walls,
-texture scaling, spritesheet-frame presets, incremental wall setters, or a
+wall tile scaling, spritesheet-frame presets, incremental wall setters, or a
 headless editor CLI. If a requested feature isn't supported, explain the
 constraint and offer the smallest compatible approach.
 

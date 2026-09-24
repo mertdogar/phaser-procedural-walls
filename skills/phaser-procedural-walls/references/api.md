@@ -32,7 +32,7 @@ Use the root for browser rendering and type-only imports for shared types.
 ```ts
 import { WallMapPlugin, WallMap } from "@mertdogar/phaser-procedural-walls";
 import type {
-  WallMapConfig, WallSpec, WallPreset, WindowSpec, DoorSpec, DoorType, DoorState, Rect, ResolvedWall,
+  WallMapConfig, WallSpec, WallPreset, WindowSpec, DoorSpec, DoorType, DoorState, DoorTextures, Rect, ResolvedWall, WallSurface,
 } from "@mertdogar/phaser-procedural-walls";
 ```
 
@@ -64,7 +64,11 @@ interface WallSpec {
   windows?: WindowSpec[];
   doors?: DoorSpec[];
 }
-interface WindowSpec { offset: number; width: number; height: number; sillHeight: number }
+interface WindowSpec {
+  offset: number; width: number; height: number; sillHeight: number;
+  texture?: string; sideTexture?: string;
+}
+interface DoorTextures { closed: string; open: string }
 interface DoorSpec {
   id: string;
   type: "hinged" | "sliding";
@@ -74,6 +78,8 @@ interface DoorSpec {
   open?: boolean;
   side?: "start" | "end";
   swing?: "left" | "right";
+  texture?: DoorTextures;
+  sideTexture?: DoorTextures;
 }
 interface WallPreset {
   fill: number; edge: number;
@@ -99,7 +105,8 @@ normalization. Windows don't remove physics bodies.
 ## Doors
 
 Door IDs must be non-empty and map-wide unique. Doors must fit within their wall
-and cannot overlap windows or other doors. Invalid door data throws during
+and cannot overlap another opening in both position and elevation. Windows
+above doors are allowed. Invalid door data throws during
 geometry resolution and map construction. Offsets follow authored wall direction.
 `side` defaults to `"start"` and selects the hinge or retraction side. `swing`
 defaults to `"left"` relative to authored wall direction and applies only to hinges.
@@ -107,7 +114,7 @@ defaults to `"left"` relative to authored wall direction and applies only to hin
 
 `openDoor(id)`, `closeDoor(id)`, and `toggleDoor(id)` return the map and update the
 door directly. `getDoorState(id)` returns `"closed"`, `"opening"`, `"open"`, or
-`"closing"`. Unknown IDs throw. Both types use a 250 ms transition and reverse
+`"closing"`. Unknown IDs throw. Without artwork, both types use a 250 ms transition and reverse
 immediately from the current position; repeated target requests are no-ops.
 Hinges rotate 90 degrees; sliding panels retract within the doorway without
 pocket-space validation.
@@ -138,10 +145,10 @@ map; `setWalls` and `redraw` reset all doors to their authored starting state.
 
 Effective face height is `wall.height ?? preset.lipHeight ?? 0`. Zero disables
 the face. Delete a wall's `height` to inherit later preset height changes.
-The face extends downward in screen space, including an end face below a
-vertical wall. Horizontal windows occupy the face when present, otherwise
-the body; vertical windows occupy the body. Only horizontal face windows
-have sills.
+The top moves upward from the fixed footprint. South-facing surfaces extend
+from their raised top toward their floor position. Horizontal windows have
+optional decorative sills; vertical openings project their width and height
+along screen y. Zero-height walls cannot contain openings.
 
 Textures tile at their original pixel size and replace the corresponding
 surface color. There are no preset frame, scale, or animation fields.
@@ -157,7 +164,7 @@ Endpoints normalize left-to-right or top-to-bottom. At connected endpoints,
 the body extends by half the maximum thickness of an intersecting wall to
 fill corners and T-junctions.
 
-Each result has `spec`, `horizontal`, `body`, `lip`, `bodyPieces`, `lipPieces`,
+Each result has `surfaces`, `spec`, `horizontal`, `body`, `lip`, `bodyPieces`, `lipPieces`,
 `windows`, `sills`, `collider`, `colliderPieces`, `doors`, and `depth`. Rectangles use
 `{ x, y, w, h }` with top-left origin. `lip` can be null. `collider` is the
 uncut footprint; use `colliderPieces` for permanent collision and each resolved
@@ -169,10 +176,10 @@ The south edge is `body.y + body.h + (lip?.h ?? 0)`:
 - Both orientations preserve footprint dimensions; the raised face adds no
   collision area. All heights preserve doorway gaps at floor level.
 - Default depth is the south edge. `wall.depth` overrides only draw order;
-  larger depths draw later. Height changes geometry and colliders as well.
+  larger depths draw later. Height changes projection without moving colliders.
 
-`cutRects(rect, holes, horizontal)` subtracts holes sharing a band across a
-rectangle. It isn't a general polygon boolean operation.
+`cutRects(rect, holes, horizontal)` subtracts axis-aligned rectangles, including
+holes in different elevation bands. The boolean controls piece partitioning. It isn't a general polygon boolean operation.
 `endExtension(px, py, self, all)` returns the connected endpoint extension.
 
 ## WallMap lifecycle
@@ -182,7 +189,7 @@ rather than being a game object itself.
 
 | Member | Behavior |
 | --- | --- |
-| `containers` | Wall containers in input order, each followed by its door containers |
+| `containers` | Surface containers per wall, followed by its door containers |
 | `bodies` | Arcade static group, or null without `collide: true` |
 | `setWalls(walls)` | Replaces wall list and rebuilds; returns this |
 | `redraw()` | Rebuilds current config; returns this |
@@ -195,3 +202,24 @@ Opening dimensions are required and stay fixed as wall height changes. Windows
 use `sillHeight` for floor elevation; preset `sillThickness` is decorative.
 Openings must fit the wall and cannot overlap in both position and elevation.
 Windows can sit above doors. Short doors retain solid headers.
+
+## Opening artwork
+
+Window `texture` is a horizontal artwork key and `sideTexture` is a vertical key.
+Door fields with those names hold `{ closed, open }` texture-key pairs. Both keys
+must be non-empty. Assignments are per opening, independent of wall presets.
+Missing artwork for an orientation means procedural fallback; a referenced but
+unloaded active texture is an error, not a fallback.
+
+Front artwork fits once to the opening, preserving alpha and replacing procedural
+decoration. A top-reaching opening also includes the wall cap thickness.
+Side artwork keeps its aspect ratio at projected height `width + height`.
+Window side artwork sits west of the wall. Door side artwork is authored facing
+west with its frame at the right canvas edge, then mirrors for an east-facing
+hinged swing. Sliding side artwork sits west.
+
+Texture fitting includes transparent outer padding. Use front images flush to
+their canvas edges and door pairs with matching frame placement and canvas size.
+Textured door operations switch imagery and collision immediately and return
+only open/closed states; untextured doors retain animation and intermediate states.
+Window images preserve their own alpha; preset glass opacity does not tint them.

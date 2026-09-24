@@ -1,53 +1,115 @@
-# Door design
+# Add and control doors
 
-This document records the implemented door design. See the
-[API reference](api.md#doorspec) for schema and runtime usage.
+Use this guide to add a passage to a Phaser wall map, choose its artwork, and
+control it from your game. It assumes you have created a scene and registered
+`WallMapPlugin` as shown in the [quick start](quickstart.md).
 
-- Doors are functional: closed doors block movement, and open doors permit
-  passage.
-- Each door belongs to a wall segment and is positioned by offset and width,
-  with a required height above the floor. Moving the wall moves its doors; deleting it removes them.
-- The consuming game decides when a door opens or closes. The library exposes
-  those operations and updates the door's appearance and collision together.
-- Wallcraft's playable preview provides a simple door interaction for testing.
-- The door schema includes a `type` with the allowed values `"hinged"` and
-  `"sliding"`. Both types are supported in the first version.
-- Collision blocks the doorway rather than following the moving door panel.
-  Swinging and sliding motion are visual; passage is enabled when fully open.
-- The consuming game checks doorway occupancy before requesting closure.
-  Doorway collision is restored when closing starts; the library does not
-  detect obstructions or automatically reopen doors.
-- Every door requires a stable, map-wide unique ID. Games address doors by ID,
-  independently of wall or door ordering. Wallcraft generates IDs when doors
-  are created.
-- A request for the opposite state reverses motion immediately from the current
-  position, for both door types. Repeating the current target has no effect;
-  commands are not queued.
-- Sliding doors retract into the wall and are concealed as they open. The
-  retraction side is configurable.
-- Sliding retraction is a visual effect clipped to the doorway. It requires no
-  pocket-space validation, including near wall endpoints or windows.
-- An optional `open` boolean defines the starting state and defaults to `false`.
-  Wallcraft edits this authored state. Runtime state changes do not modify the
-  authored map; save-game behavior belongs to the consuming game.
-- Hinged doors open through a fixed 90-degree angle. The hinge can be at either
-  end of the doorway, and the swing can be toward either side of the wall.
-  Custom opening angles and double doors are outside the first version.
-- Doors must fit within their wall length and height. Openings must not
-  intersect in both along-wall position and elevation. Windows above doors
-  are allowed. Invalid placements produce clear errors rather
-  than silently moving or shrinking doors. Wallcraft prevents invalid placement
-  during editing.
-- Door appearance comes from the existing wall preset, with door fill and frame
-  colors and sensible defaults shared by both door types. The first version
-  does not introduce separate door presets or per-door appearance overrides.
-- The runtime API exposes `openDoor(id)`, `closeDoor(id)`, `toggleDoor(id)`, and
-  `getDoorState(id)`. Observable states are `"closed"`, `"opening"`, `"open"`, and
-  `"closing"`. Unknown door IDs produce clear errors.
-- `setWalls()` and `redraw()` reset doors to their authored `open` state.
-  Ordinary door operations update existing doors directly. Rebuilds do not
-  preserve runtime state or animation progress.
+## Add a doorway
 
-Both door types use a fixed 250 ms full transition. `side` selects the hinge or
-retraction end; `swing` selects the hinged swing side relative to the authored
-wall direction.
+Create a wall with enough length and height for the opening:
+
+```ts
+const walls = this.add.wallMap({
+  presets: { interior: { fill: 0xe7ded0, edge: 0x3c403a } },
+  walls: [{
+    x1: 100, y1: 240, x2: 420, y2: 240,
+    thickness: 16, height: 100, preset: "interior",
+    doors: [{
+      id: "office-entry", type: "hinged",
+      offset: 112, width: 80, height: 80,
+      side: "start", swing: "right", open: false,
+    }],
+  }],
+  collide: true,
+});
+```
+
+The opening starts 112 world units along the authored wall. Its floor stays at
+the wall footprint, and the remaining 20 units of wall height form a header.
+IDs must be non-empty and unique across the map. Windows can sit above doors if
+their elevation ranges don't overlap. See the [schema](api.md#doorspec).
+
+Attach your player's Arcade collider to `walls.bodies`. The moving door panel
+is visual; a separate body blocks the passage when closed.
+
+## Choose procedural behavior
+
+Without artwork, `type: "hinged"` rotates the panel 90 degrees and
+`type: "sliding"` retracts it into the doorway. Both take 250 ms for a complete
+transition. Reversing direction continues from the current position.
+
+`side` selects the hinge or retraction end. `swing` selects the side relative to
+the authored direction from the first endpoint to the second; it only affects
+hinged doors. For a southbound vertical wall, `"left"` swings east and
+`"right"` swings west. Reversing the endpoints preserves these authored rules.
+
+## Assign front and side artwork
+
+Load complete images in your scene's `preload()`:
+
+```ts
+this.load.image("entry-closed", "/art/door-closed.png");
+this.load.image("entry-open", "/art/door-open.png");
+this.load.image("entry-side-closed", "/art/door-side-closed.png");
+this.load.image("entry-side-open", "/art/door-side-open.png");
+```
+
+Then add these fields to the door before creating the map:
+
+```ts
+texture: { closed: "entry-closed", open: "entry-open" },
+sideTexture: { closed: "entry-side-closed", open: "entry-side-open" },
+```
+
+`texture` applies to horizontal walls; `sideTexture` applies to vertical walls.
+Each assigned pair requires both images. An orientation without a pair uses
+procedural rendering. A missing image for an active assignment throws an error.
+
+Textured doors switch images and collision immediately. They don't rotate or
+slide the uploaded image. The artwork can depict a double door while the library
+still manages one passage and one door ID.
+
+For assets that fit the opening:
+
+- Make front artwork flush with its canvas boundaries; outer transparent padding
+  creates visible gaps. Preserve transparency inside an open doorway.
+- Give open and closed states matching canvas dimensions and frame placement.
+- Draw side artwork facing west, with its wall attachment at the right canvas
+  edge. Reserve transparent space on the left for open leaves. The renderer
+  mirrors it for an east-facing hinged swing.
+- Front images fit width and height, including the top thickness when the door
+  reaches the wall top. Side images retain their aspect ratio at a projected
+  height of door width plus door height.
+
+Wallcraft's sample includes generated front and side pairs. In its inspector,
+expand **Opening artwork**, assign or upload images, and click **Apply artwork**.
+See [the editor guide](wallcraft.md#assign-door-and-window-artwork).
+
+## Control the passage
+
+Use the same API for procedural and textured doors:
+
+```ts
+walls.openDoor("office-entry");
+walls.closeDoor("office-entry");
+walls.toggleDoor("office-entry");
+const state = walls.getDoorState("office-entry");
+```
+
+Procedural doors can report `"opening"` or `"closing"` during motion. Textured
+doors go directly to `"open"` or `"closed"`. Repeated requests for the same
+target are safe; unknown IDs throw.
+
+Collision remains enabled until a procedural door is fully open. Closing enables
+it immediately for both rendering modes. Check doorway occupants before calling
+`closeDoor()`; the library does not prevent a door from closing on a character.
+Wallcraft preview performs this check for its player when you press **E** nearby.
+
+## Preserve state when rebuilding
+
+Door methods update the existing objects and leave authored `open` values alone.
+`setWalls()` and `redraw()` reset runtime states to those authored values and
+replace the physics group. Save any state your game needs, update the authored
+values before rebuilding, and reconnect your Arcade collider afterward.
+
+See [WallMap lifecycle](api.md#wallmap) for the complete method contract.

@@ -12,8 +12,8 @@ outside the component; feed accepted edits back with `setState`.
 ## Launch the editor
 
 With Node 20 or newer and a release containing the editor CLI, run either
-command. Version 0.2.0 source includes the CLI; check publication separately
-if a registry installation fails.
+command. These references track source; check the installed package version
+and types before assuming it contains the latest changes.
 
 ```sh
 npx @mertdogar/phaser-procedural-walls@latest editor
@@ -58,7 +58,8 @@ the original 0.2.0 editor has a fixed viewport.
 Wall `height` overrides preset `lipHeight`. To restore inheritance, remove
 that wall's `height` field in JSON; don't substitute zero, which disables the
 face. Undo/redo covers add, duplicate, delete, reorder, bulk dimensions, reset,
-import, and saved preset edits, not every direct field change or drag.
+import, saved preset edits, accepted inspector edits, completed drags, and applied
+opening artwork. Preview interactions do not alter authored door states.
 
 ## Layers and map preferences
 
@@ -97,7 +98,7 @@ to a solid color removes the assignment but retains the uploaded asset in the
 map's collection and export.
 
 Exports add `textures: Record<string, string>` to the ordinary config. Each
-key is a preset texture key and each value an image data URL. Keep those keys
+key is a preset or opening texture key and each value an image data URL. Keep those keys
 and the dictionary together. Missing embedded images must be uploaded or the
 surface changed to a solid color in the editor.
 
@@ -107,3 +108,21 @@ assets, then construct the map. Add functional hinged or sliding doors in the
 wall inspector; window openings remain solid for collisions. Door fields and
 preset colors survive JSON round trips. Press E near a door in preview to toggle
 it; the preview refuses closure while the player occupies its doorway.
+
+## Assign opening artwork
+
+Each door or window has an **Opening artwork** section in its wall inspector.
+Choose an existing image or upload PNG, JPEG, or WebP up to 5 MB, then click
+**Apply artwork**. Front means horizontal walls; side means vertical walls.
+Windows take one image per orientation, doors require a complete closed/open
+pair. Clear an orientation to restore procedural rendering. Removing an
+assignment retains the image in the map collection.
+
+The generated sample assets have front frames flush with the canvas. Side door
+pairs face west with their frame at the right edge and mirror for east-facing
+swings. Matching state dimensions prevent visual jumps; outer transparent
+padding creates gaps. Artwork fits once; preset materials tile.
+
+Textured door state and collision change instantly. Procedural doors still
+animate. Uploaded image alpha replaces the window's generated glass, frame, and
+sill. Assignments and images are included in JSON and undo/redo history.

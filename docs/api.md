@@ -4,7 +4,7 @@ The renderer and types are available from the package root:
 
 ```ts
 import { WallEditor, WallMapPlugin, WallMap, resolveWalls } from "@mertdogar/phaser-procedural-walls";
-import type { WallMapConfig, WallSpec, WallPreset, WindowSpec, DoorSpec, DoorType, DoorState, ResolvedDoor, ResolvedWall, Rect } from "@mertdogar/phaser-procedural-walls";
+import type { WallMapConfig, WallSpec, WallPreset, WindowSpec, DoorSpec, DoorType, DoorState, DoorTextures, ResolvedDoor, ResolvedWall, WallSurface, Rect } from "@mertdogar/phaser-procedural-walls";
 ```
 
 For server-side geometry without importing Phaser, use the dedicated entry point:
@@ -256,7 +256,8 @@ Texture keys must exist in the scene's Texture Manager before `wallMap` is calle
 
 ## WallMap
 
-The handle returned by the factory. It is not itself a Game Object; it owns wall and door Containers.
+`new WallMap(scene, config)` or the scene factory returns this handle. Direct
+construction needs no plugin registration. It is not itself a Game Object; it owns wall and door Containers.
 
 | member | type | description |
 | --- | --- | --- |
@@ -272,7 +273,7 @@ The handle returned by the factory. It is not itself a Game Object; it owns wall
 | `destroy()` | `() => void` | Destroys containers and bodies and removes scene listeners. Also runs on scene shutdown. |
 
 Door methods update existing objects without replacing physics groups. Repeating
-the current target is a no-op; unknown IDs throw. The doorway stays blocked until
+the current target preserves that state; unknown IDs throw. The doorway stays blocked until
 fully open and becomes blocked as soon as closing starts. The moving panel has
 no physical collision. With `collide: false`, visuals and state still work.
 
@@ -288,7 +289,9 @@ These are pure functions with no Phaser dependency. They are what the unit tests
 
 ### resolveWalls(walls, presets): ResolvedWall[]
 
-Normalizes each wall, computes endpoint extensions, and produces every rectangle the renderer draws.
+Validates openings, normalizes endpoints, computes extensions, and returns the
+projected surfaces and floor colliders. Side artwork width additionally depends
+on its image aspect ratio at render time. This function does not load textures.
 
 ### ResolvedWall
 
@@ -298,7 +301,7 @@ Normalizes each wall, computes endpoint extensions, and produces every rectangle
 | `horizontal` | `boolean` | `true` when `y1 === y2`. |
 | `body` | `Rect` | Wall top including endpoint extensions. |
 | `lip` | `Rect \| null` | Bounding south face below the raised body; `null` when effective wall height is zero. Negative heights throw. |
-| `surfaces` | `WallSurface[]` | Projected rectangles with material `kind`, floor south edge `floorY`, and drawing `depth`. |
+| `surfaces` | `WallSurface[]` | Projected rectangles with material `kind`, floor south edge `floorY`, drawing `depth`, and optional opening `texture`. |
 | `bodyPieces` | `Rect[]` | Body with window and door holes cut out. |
 | `lipPieces` | `Rect[]` | Face with window and door holes cut out. |
 | `windows` | `Rect[]` | Glass rectangles. |
@@ -310,7 +313,26 @@ Normalizes each wall, computes endpoint extensions, and produces every rectangle
 
 ### cutRects(rect, holes, horizontal): Rect[]
 
-Subtracts axis-aligned `holes` from `rect`, assuming all holes share a band across the wall. Returns the remaining strips: two along the wall and one between each pair of holes.
+Subtracts each axis-aligned hole from the remaining rectangles in turn. Holes
+can overlap or occupy different elevation bands. `horizontal` selects how the
+remaining pieces are partitioned; both modes remove the same intersecting area.
+
+### endExtension(px, py, self, all): number
+
+Returns half the largest thickness of another wall whose centerline contains
+this endpoint, or zero when there is no connection. Available from `/geometry`.
+
+### WallSurface
+
+Each entry in `ResolvedWall.surfaces` has these fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `rect` | `Rect` | Projected surface bounds. |
+| `kind` | `"body" \| "lip" \| "window" \| "sill"` | Material category. |
+| `floorY` | `number` | South floor edge used to sort the surface. |
+| `depth` | `number` | Final drawing depth, including override and elevation tie-break. |
+| `texture` | `string` | Optional window artwork key for this orientation. |
 
 ### Rect
 

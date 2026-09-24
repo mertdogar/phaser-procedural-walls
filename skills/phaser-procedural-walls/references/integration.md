@@ -86,7 +86,7 @@ type assertion above isn't validation. For repeated loads, reuse or deliberately
 replace existing texture keys instead of accidentally overwriting other assets.
 
 Without embedded assets, preload your image files with the exact keys used by
-`preset.texture` and `preset.lipTexture`. Passing the export directly to the
+`preset.texture`, `preset.lipTexture`, and each opening artwork assignment. Passing the export directly to the
 factory doesn't load images. Wait for loading to finish before constructing it.
 
 ## Reconnect after rebuilding
@@ -124,5 +124,5 @@ Check the underlying data and lifecycle before adding workarounds.
 | Wrong wall overlap | Explicit `depth`, otherwise resolved south-edge depth |
 | Player always covers walls | Feet origin and depth updated with feet y |
 | Preset height seems ignored | Wall's own `height` overrides preset `lipHeight` |
-| Window can't be walked through | Windows don't cut colliders; use a wall gap |
+| Window can't be walked through | Windows don't cut colliders; use a door |
 | Node complains about browser globals | Import `/geometry`, not the root |

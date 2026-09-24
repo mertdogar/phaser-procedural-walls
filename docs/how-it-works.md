@@ -18,7 +18,7 @@ Only axis-aligned walls are supported. Wall geometry stays rectangular; hinged d
 
 You author endpoints on the centerline, so two walls meeting at a corner would leave a notch the size of half a thickness. The plugin fixes this by extension: for each endpoint of a wall, it looks for any other wall whose centerline passes through that point, including its interior. If it finds one, the endpoint is pushed outward by half of that wall's thickness.
 
-At an L corner both walls extend and overlap. At a T-junction only the stem extends, into the bar. Since bodies are drawn before strokes within each wall, and each wall is its own object, you may see one wall's outline cross the other at a junction. Set that wall's optional `depth` to change which segment draws last.
+At an L corner both walls extend and overlap. At a T-junction only the stem extends, into the bar. Since surfaces have their own outlines and drawing depths, you may see one wall's outline cross the other at a junction. Set that wall's optional `depth` to change which segment draws last.
 
 ## Depth sorting
 
@@ -79,11 +79,12 @@ Doors are wall-owned passages with independent IDs and runtime state. Geometry
 cuts the wall visuals up to the required door `height`, retaining wall above a
 shorter door, and cuts the footprint around each passage. A separate static body
 blocks each doorway until its door is fully open; closing restores it immediately.
-Hinged panels rotate 90 degrees, while sliding panels retract out of sight within
-the doorway. Panels are visual and cannot push characters.
+Without artwork, hinged panels rotate 90 degrees and sliding panels retract
+out of sight within the doorway. With an assigned artwork pair, the image and
+collision switch immediately. Panels are visual and cannot push characters.
 
 The game calls door methods and checks occupancy before closing. Direction changes
-reverse the current animation without queuing commands. Rebuilding walls restores
+reverse procedural animation without queuing commands. Rebuilding walls restores
 the authored starting state. See the [door API](api.md#doorspec) for schema details.
 
 ## Textures
@@ -100,8 +101,32 @@ The older scene examples above illustrate tiled materials. Wallcraft now lets yo
 
 Preset edits affect every wall that references that preset. Renaming a preset updates those references. A wall's individual height override takes precedence over the preset height. The editor keeps changes in memory; JSON export is how you retain and transfer them.
 
+## Opening artwork and projection
+
+Wall materials tile across surfaces; opening artwork is one fitted image. A
+window image replaces procedural glass, frame, and sill. Image alpha controls
+transparency independently of the preset's glass opacity. Window artwork does
+not turn a window into a passage.
+
+Front artwork fits the opening on a horizontal wall. If an opening reaches the
+wall top, its image also covers the thickness of the removed cap. This keeps a
+full-height closed door attached to both the top and the floor. Outer transparent
+padding is still part of the image canvas, so it produces apparent gaps.
+
+A vertical opening is viewed edge-on. Its image height combines its length along
+the floor and its elevation; width follows the image's aspect ratio. Side door
+artwork sits beside the wall, where an overhead solid section cannot hide it.
+It faces west by default and mirrors for an east-facing hinged swing. Vertical
+window artwork sits west of the wall. This is a 2.5D visual convention, not a
+3D mesh or a physical change to the footprint.
+
+Front and side assignments are independent. Omitting one orientation preserves
+its procedural fallback. Open and closed door textures represent complete states,
+so their collision switches immediately instead of waiting for an animation.
+
 ## What the plugin does not do
 
 - Diagonal walls or curved walls.
 - Incremental wall geometry updates. Door operations are incremental; wall edits rebuild the map.
-- Tracking character depth. One line in your update loop does that.
+- Tracking character depth. Feet-y sorting works with automatic depths; custom
+  drawing orders require your own sorting logic.
