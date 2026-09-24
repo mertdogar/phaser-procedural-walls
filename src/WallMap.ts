@@ -1,6 +1,7 @@
 import Phaser from "phaser";
+import { migrateWallConfig } from "./schema";
 import { resolveWalls } from "./geometry";
-import type { DoorState, DoorTextures, Rect, ResolvedDoor, ResolvedWall, WallMapConfig, WallPreset } from "./types";
+import type { DoorState, DoorTextures, Rect, ResolvedDoor, ResolvedWall, WallMapConfig, LegacyWallMapConfig, WallPreset, WallSurface } from "./types";
 
 interface RuntimeDoor {
   door: ResolvedDoor;
@@ -9,6 +10,7 @@ interface RuntimeDoor {
   graphics: Phaser.GameObjects.Graphics;
   container: Phaser.GameObjects.Container;
   blocker: Phaser.Physics.Arcade.StaticBody | null;
+  surface?: WallSurface;
   artwork?: { image: Phaser.GameObjects.Image; textures: DoorTextures };
   progress: number;
   open: boolean;
@@ -21,9 +23,9 @@ export class WallMap {
   private config: WallMapConfig;
   private doors = new Map<string, RuntimeDoor>();
 
-  constructor(scene: Phaser.Scene, config: WallMapConfig) {
+  constructor(scene: Phaser.Scene, config: WallMapConfig | LegacyWallMapConfig) {
     this.scene = scene;
-    this.config = config;
+    this.config = migrateWallConfig(config);
     this.build();
     scene.events.on("update", this.updateDoors, this);
     scene.events.once("shutdown", this.destroy, this);
@@ -73,6 +75,10 @@ export class WallMap {
     const door = this.getDoor(id);
     return door.open ? (door.progress === 1 ? "open" : "opening")
       : (door.progress === 0 ? "closed" : "closing");
+  }
+
+  getDoorSurfaces(): WallSurface[] {
+    return [...this.doors.values()].flatMap((door) => door.surface ? [door.surface] : []);
   }
 
   private getDoor(id: string): RuntimeDoor {
@@ -230,7 +236,10 @@ export class WallMap {
         image.setFlipX(right).setPosition(right ? r.x + r.w : r.x, r.y + r.h).setOrigin(right ? 0 : 1, 1)
           .setDisplaySize(height * image.width / image.height, height);
       }
-      container.setDepth(r.y + r.h + (wall.spec.depth === undefined ? 0 : wall.depth - wall.collider.y - wall.collider.h) + 0.001);
+      const bounds = image.getBounds();
+      const depth = r.y + r.h + (wall.spec.depth === undefined ? 0 : wall.depth - wall.collider.y - wall.collider.h) + 0.001;
+      runtime.surface = { rect: { x: bounds.x, y: bounds.y, w: bounds.width, h: bounds.height }, kind: "body", floorY: r.y + r.h, depth };
+      container.setDepth(depth);
       return;
     }
     const end = spec.side === "end";
@@ -253,7 +262,10 @@ export class WallMap {
       angle += (end ? Math.PI : 0) + (spec.swing === "right" ? 1 : -1) * (end ? -1 : 1) * progress * Math.PI / 2;
     }
     g.clear();
-    if (length <= 0) return;
+    if (length <= 0) {
+      runtime.surface = undefined;
+      return;
+    }
     const dx = Math.cos(angle) * length;
     const dy = Math.sin(angle) * length;
     const half = Math.min(wall.spec.thickness, 8) / 2;
@@ -278,6 +290,13 @@ export class WallMap {
     g.fillPoints(points, true).strokePoints(points, true);
     const depth = Math.max(y, y + dy) + half
       + (wall.spec.depth === undefined ? 0 : wall.depth - wall.collider.y - wall.collider.h);
+    const left = Math.min(...points.map((p) => p.x));
+    const top = Math.min(...points.map((p) => p.y));
+    runtime.surface = {
+      rect: { x: left, y: top, w: Math.max(...points.map((p) => p.x)) - left,
+        h: Math.max(...points.map((p) => p.y)) + height - top },
+      kind: "body", floorY: Math.max(y, y + dy) + half, depth,
+    };
     container.setDepth(depth);
   }
 

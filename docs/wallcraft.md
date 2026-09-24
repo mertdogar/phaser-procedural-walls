@@ -250,6 +250,70 @@ automatic wall depths, `setDepth(player.y)` each frame. Custom depths need
 additional character sorting; see the [depth convention](api.md#depth-convention)
 and [quick start](quickstart.md#4-add-a-character).
 
+## Use external image files
+
+You can keep images in your game's asset folder and omit the top-level `textures`
+dictionary. In a Vite game, place the files below in `public/art/`. Register
+`WallMapPlugin` as in the [quick start](quickstart.md), then load the images before
+creating the map:
+
+```ts
+import Phaser from "phaser";
+import type { WallMapConfig } from "@mertdogar/phaser-procedural-walls";
+
+const map: WallMapConfig = {
+  version: 2,
+  presets: {
+    office: {
+      fill: 0xd8c4a5, edge: 0x3c403a,
+      texture: "wall-top", lipTexture: "wall-face",
+    },
+  },
+  walls: [{
+    x1: 100, y1: 240, x2: 500, y2: 240,
+    thickness: 16, height: 100, preset: "office",
+    windows: [{
+      offset: 40, width: 80, height: 40, sillHeight: 40,
+      texture: "window",
+    }],
+    doors: [{
+      id: "entry", type: "hinged", offset: 220, width: 80, height: 80,
+      texture: { closed: "entry-closed", open: "entry-open" },
+    }],
+  }],
+};
+
+class Office extends Phaser.Scene {
+  preload() {
+    this.load.image("wall-top", "/art/wall-top.png");
+    this.load.image("wall-face", "/art/wall-face.png");
+    this.load.image("window", "/art/window.png");
+    this.load.image("entry-closed", "/art/door-closed.png");
+    this.load.image("entry-open", "/art/door-open.png");
+  }
+
+  create() {
+    this.add.wallMap(map);
+  }
+}
+```
+
+The first argument to `load.image` is the texture key used in the map; the second
+is the file URL fetched by Phaser. Never put a file path in a preset or opening's
+`texture` field. Wall materials tile; door and window artwork fits the opening.
+Vertical openings use separately loaded `sideTexture` keys, with an open/closed
+pair for doors. See the [door artwork guide](doors.md#assign-front-and-side-artwork).
+
+The map object can also live in a JSON file: load it with `this.load.json` in
+`preload()`, then read it from `this.cache.json` in `create()`, as above. Images
+still load separately under the keys referenced by that JSON.
+
+**Wallcraft import limitation:** the editor's top-level `textures` dictionary
+accepts embedded PNG, JPEG, or WebP data URLs only. Replacing those values with
+file paths or external URLs is not supported. To edit a map whose images are
+loaded separately by your game, upload the corresponding files in Wallcraft;
+its export will embed them again. The library itself does not fetch images.
+
 ## Embed the wall editor in your game
 
 Starting with 0.4.0, you can import `WallEditor` from the package root and attach
@@ -272,3 +336,12 @@ See [EmbeddedEditorScene.ts](../demo/editor/EmbeddedEditorScene.ts) for the
 complete runnable example and the [WallEditor API](api.md#walleditor) for the
 callback contract and lifecycle. The full Wallcraft application demonstrates a
 React host in [EditorScene.ts](../demo/editor/EditorScene.ts).
+
+## Import older map versions
+
+Importing JSON marked `"version": 1` automatically converts its top-origin walls
+and implicit opening dimensions to schema version 2. The original file is not
+changed. Export the imported map to save the migrated data with `"version": 2`.
+Unversioned JSON is treated as the current format. For older unversioned files,
+add `"version": 1` before importing. Review vertical windows and mixed-height
+junctions after conversion. See [migration rules](api.md#map-schema-migration).

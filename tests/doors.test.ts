@@ -18,6 +18,12 @@ function setup(type: DoorType = "hinged", open = false, collide = true) {
   const image = (_x: number, _y: number, key: string) => {
     const item = { width: 32, height: 96 } as unknown as Record<string, ReturnType<typeof vi.fn>>;
     for (const method of ["setTexture", "setPosition", "setOrigin", "setDisplaySize", "setFlipX", "destroy"]) item[method] = vi.fn().mockReturnValue(item);
+    item.getBounds = vi.fn(() => {
+      const [x, y] = item.setPosition.mock.calls.at(-1)!;
+      const [ox, oy] = item.setOrigin.mock.calls.at(-1)!;
+      const [width, height] = item.setDisplaySize.mock.calls.at(-1)!;
+      return { x: x - ox * width, y: y - oy * height, width, height };
+    });
     item.setTexture(key);
     images.push(item);
     return item;
@@ -46,7 +52,7 @@ function setup(type: DoorType = "hinged", open = false, collide = true) {
     const [, callback, context] = events.on.mock.calls.find(([name]) => name === "update")!;
     callback.call(context, 0, delta);
   };
-  return { map, config, tick, bodies, group, events, drawings, images };
+  return { map, config, tick, bodies, group, events, drawings, images, scene };
 }
 
 describe.each(["hinged", "sliding"] as const)("%s door runtime", (type) => {
@@ -123,7 +129,7 @@ it("removes update and shutdown listeners on destruction", () => {
 
 it("round-trips door configuration and rejects invalid imported maps", () => {
   const { config } = setup();
-  expect(parseWallConfig(serializeWallConfig(config))).toEqual(config);
+  expect(parseWallConfig(serializeWallConfig(config))).toEqual({ ...config, version: 2 });
   config.walls[0].doors![0].width = 1000;
   expect(() => parseWallConfig(serializeWallConfig(config))).toThrow(/fit/);
 });
@@ -170,7 +176,7 @@ it("rejects imported legacy openings and preserves explicit window dimensions in
   const { config } = setup();
   config.walls[0].height = 100;
   config.walls[0].windows = [{ offset: 50, width: 80, height: 20, sillHeight: 60 }];
-  expect(parseWallConfig(serializeWallConfig(config))).toEqual(config);
+  expect(parseWallConfig(serializeWallConfig(config))).toEqual({ ...config, version: 2 });
   const legacy = JSON.parse(serializeWallConfig(config));
   delete legacy.walls[0].doors[0].height;
   expect(() => parseWallConfig(JSON.stringify(legacy))).toThrow(/height/);
@@ -237,7 +243,7 @@ it("round-trips embedded opening artwork and rejects incomplete pairs", () => {
   const { config } = setup();
   config.walls[0].doors![0].texture = { closed: "closed", open: "open" };
   const embedded = { ...config, textures: { closed: "data:image/png;base64,AAAA", open: "data:image/png;base64,BBBB" } };
-  expect(parseWallConfig(serializeWallConfig(embedded))).toEqual(embedded);
+  expect(parseWallConfig(serializeWallConfig(embedded))).toEqual({ ...embedded, version: 2 });
   const invalid = JSON.parse(serializeWallConfig(embedded));
   delete invalid.walls[0].doors[0].texture.open;
   expect(() => parseWallConfig(JSON.stringify(invalid))).toThrow(/both closed and open/);
@@ -276,4 +282,36 @@ it.each(["left", "right"] as const)("mirrors side artwork only for the %s swing"
   const { map, config, images } = setup();
   map.setWalls([{ ...config.walls[0], x2: 0, y2: 200, doors: [{ ...config.walls[0].doors![0], swing, sideTexture: { closed: "closed", open: "open" } }] }]);
   expect(images[0].setFlipX).toHaveBeenCalledWith(swing === "left");
+});
+
+
+it("automatically migrates version-1 configs before building the runtime", () => {
+  const { scene } = setup();
+  const map = new WallMap(scene as unknown as Phaser.Scene, {
+    version: 1, presets: { p: { fill: 0, edge: 0, lipHeight: 40 } }, collide: true,
+    walls: [{ x1: 0, y1: 100, x2: 200, y2: 100, thickness: 20, preset: "p",
+      doors: [{ id: "legacy", type: "hinged", offset: 50, width: 80 }] }],
+  });
+  expect(map.getDoorState("legacy")).toBe("closed");
+  map.openDoor("legacy");
+  map.redraw();
+  expect(map.getDoorState("legacy")).toBe("closed");
+  expect(() => new WallMap(scene as unknown as Phaser.Scene, {
+    version: 3, presets: {}, walls: [],
+  } as unknown as WallMapConfig)).toThrow(/Unsupported wall map version/);
+});
+
+
+it("exposes moving door geometry for occlusion and removes fully retracted panels", () => {
+  const { map, tick } = setup();
+  const closed = map.getDoorSurfaces()[0];
+  expect(closed.floorY).toBe(4);
+  expect(closed.rect).toEqual({ x: 50, y: -28, w: 80, h: 32 });
+  map.openDoor("entry");
+  tick(250);
+  expect(map.getDoorSurfaces()[0].rect).not.toEqual(closed.rect);
+  const sliding = setup("sliding");
+  sliding.map.openDoor("entry");
+  sliding.tick(250);
+  expect(sliding.map.getDoorSurfaces()).toEqual([]);
 });

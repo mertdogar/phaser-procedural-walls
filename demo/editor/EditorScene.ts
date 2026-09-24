@@ -165,16 +165,16 @@ export class EditorScene extends Phaser.Scene {
     const player = this.player!;
     let behind = Infinity;
     let inFront = -Infinity;
-    for (const wall of this.previewWalls) {
-      for (const surface of wall.surfaces) {
-        const r = surface.rect;
-        if (player.x + player.width / 2 <= r.x || player.x - player.width / 2 >= r.x + r.w
-          || player.y <= r.y || player.y - player.height >= r.y + r.h) continue;
-        const floorY = surface.floorY;
-        if (wall.spec.depth === undefined) continue;
-        if (player.y < floorY) behind = Math.min(behind, surface.depth);
-        else inFront = Math.max(inFront, surface.depth);
-      }
+    const surfaces = [
+      ...this.previewWalls.filter((wall) => wall.spec.depth !== undefined).flatMap((wall) => wall.surfaces),
+      ...(this.wallMap?.getDoorSurfaces() ?? []),
+    ];
+    for (const surface of surfaces) {
+      const r = surface.rect;
+      if (player.x + player.width / 2 <= r.x || player.x - player.width / 2 >= r.x + r.w
+        || player.y <= r.y || player.y - player.height >= r.y + r.h) continue;
+      if (player.y < surface.floorY) behind = Math.min(behind, surface.depth);
+      else inFront = Math.max(inFront, surface.depth);
     }
     if (inFront < behind && Number.isFinite(inFront) && Number.isFinite(behind)) {
       return (inFront + behind) / 2;

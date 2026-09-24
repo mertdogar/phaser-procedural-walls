@@ -55,6 +55,9 @@ These details prevent integrations that compile but render or collide wrongly.
   `setWalls()` or `redraw()`; don't retain the old group.
 - Preset and opening textures are already-loaded Phaser texture keys, not URLs. Wallcraft's
   extra `textures` dictionary needs explicit loading before map construction.
+  Games can omit it and preload external files; see
+  [external image files](references/integration.md#use-external-image-files).
+  Wallcraft imports accept only embedded data URLs in that dictionary.
 - Opening artwork is fitted once. Doors use complete front/side closed-open pairs;
   textured states switch immediately, untextured states animate. See the API
   reference for side-image framing and mirroring.

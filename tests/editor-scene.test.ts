@@ -21,6 +21,7 @@ vi.mock("phaser", () => {
 vi.mock("../src/WallMap", () => ({ WallMap: class {
   containers = [{ setPosition: vi.fn().mockReturnThis(), setAlpha: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis() }];
   destroy() {}
+  getDoorSurfaces() { return []; }
 } }));
 
 import { EditorScene } from "../demo/editor/EditorScene";
@@ -245,6 +246,20 @@ describe("editor world coordinates", () => {
     if (inFront) expect(actualDepth).toBeGreaterThan(depth);
     else expect(actualDepth).toBeLessThan(depth);
   });
+  it.each([[580, false], [635, true]])("sorts feet at %s against a door in an otherwise empty opening", (feet, inFront) => {
+    const scene = new EditorScene({ presets: {}, walls: [] }, vi.fn());
+    const player = { x: 300, y: feet, height: 64, width: 32, setVelocity: vi.fn().mockReturnThis(), setDepth: vi.fn() };
+    Object.assign(scene, { preview: true, player, previewWalls: [], wallMap: {
+      getDoorSurfaces: () => [{ rect: { x: 260, y: 520, w: 80, h: 110 }, floorY: 630, depth: -300 }],
+    }, cursors: {
+      left: { isDown: false }, right: { isDown: false }, up: { isDown: false }, down: { isDown: false },
+    } });
+    scene.update();
+    const depth = player.setDepth.mock.calls[0][0];
+    if (inFront) expect(depth).toBeGreaterThan(-300);
+    else expect(depth).toBeLessThan(-300);
+  });
+
   it.each([[1600, 1280, 2112, 1280], [-320, -160, -64, -160]])(
     "draws beyond the original viewport from (%s, %s) to (%s, %s)",
     (x1, y1, x2, y2) => {

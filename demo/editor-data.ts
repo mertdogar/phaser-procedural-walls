@@ -10,6 +10,7 @@ import stoneFace from "./assets/textures/stone-face.png?inline";
 import plasterCap from "./assets/textures/plaster-cap.png?inline";
 import plasterFace from "./assets/textures/plaster-face.png?inline";
 import type { WallMapConfig as BaseWallMapConfig, WallSpec } from "../src/types";
+import { migrateWallConfig } from "../src/schema";
 import { resolveWalls } from "../src/geometry";
 
 export interface WallMapConfig extends BaseWallMapConfig {
@@ -31,6 +32,7 @@ export function getMapBounds(config: WallMapConfig) {
 }
 
 export const initialConfig: WallMapConfig = {
+  version: 2,
   presets: {
     exterior: {
       fill: 0xd8c4a5,
@@ -165,31 +167,13 @@ function wall(
 }
 
 export function parseWallConfig(value: string): WallMapConfig {
-  const parsed = JSON.parse(value) as WallMapConfig;
-  if (!parsed || typeof parsed !== "object" || !parsed.presets || !Array.isArray(parsed.walls)) {
-    throw new Error("Expected an object with presets and walls.");
-  }
+  const parsed = migrateWallConfig(JSON.parse(value)) as WallMapConfig;
   if (parsed.textures && (typeof parsed.textures !== "object" || Array.isArray(parsed.textures) || Object.values(parsed.textures).some((source) => typeof source !== "string" || !/^data:image\/(png|jpeg|webp);base64,/.test(source)))) {
     throw new Error("Textures must contain embedded PNG, JPEG, or WebP images.");
   }
-  for (const [index, item] of parsed.walls.entries()) {
-    if (
-      typeof item.x1 !== "number" ||
-      typeof item.y1 !== "number" ||
-      typeof item.x2 !== "number" ||
-      typeof item.y2 !== "number" ||
-      typeof item.thickness !== "number" ||
-      (item.height !== undefined && typeof item.height !== "number") ||
-      (item.depth !== undefined && typeof item.depth !== "number") ||
-      typeof item.preset !== "string"
-    ) {
-      throw new Error(`Wall ${index + 1} is missing required fields.`);
-    }
-  }
-  resolveWalls(parsed.walls, parsed.presets);
   return parsed;
 }
 
 export function serializeWallConfig(config: WallMapConfig): string {
-  return JSON.stringify(config, null, 2);
+  return JSON.stringify(migrateWallConfig(config), null, 2);
 }

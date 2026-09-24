@@ -64,6 +64,7 @@ export interface WallSpec {
 }
 
 export interface WallMapConfig {
+  version?: 2;
   presets: Record<string, WallPreset>;
   walls: WallSpec[];
   collide?: boolean;
@@ -98,4 +99,14 @@ export interface ResolvedWall {
   colliderPieces: Rect[];
   doors: ResolvedDoor[];
   depth: number;
+}
+
+export interface LegacyWallMapConfig {
+  version: 1;
+  presets: Record<string, WallPreset & { sillHeight?: number }>;
+  walls: (Omit<WallSpec, "windows" | "doors"> & {
+    windows?: Omit<WindowSpec, "height" | "sillHeight">[];
+    doors?: Omit<DoorSpec, "height">[];
+  })[];
+  collide?: boolean;
 }

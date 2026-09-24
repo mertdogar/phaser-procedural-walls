@@ -145,9 +145,41 @@ const wallMap: WallMap = this.add.wallMap(config);
 
 | field | type | required | description |
 | --- | --- | --- | --- |
+| `version` | `2` | no | Current map schema. Missing means version 2; exports always include it. |
 | `presets` | `Record<string, WallPreset>` | yes | Named styles referenced by walls. |
 | `walls` | `WallSpec[]` | yes | The wall segments. |
 | `collide` | `boolean` | no | When true, creates Arcade static bodies. Requires Arcade Physics on the scene. Default `false`. |
+
+### Map schema migration
+
+`migrateWallConfig(value: unknown): WallMapConfig & { version: 2 }` validates a
+map and converts explicit version 1 input to version 2. `WallMap` construction
+(including `this.add.wallMap`) and Wallcraft import call it automatically.
+The constructor also accepts the exported `LegacyWallMapConfig` type.
+
+```ts
+import { migrateWallConfig } from "@mertdogar/phaser-procedural-walls";
+const config = migrateWallConfig(JSON.parse(savedJson));
+```
+
+- Missing `version` means current schema, preserving unversioned 0.5.0 maps.
+  Set `version: 1` explicitly for older maps; dimensions are not used to guess.
+- Unsupported versions throw. Migration does not modify the input or load images.
+  Extra fields such as embedded `textures` survive conversion at runtime.
+- Version 1 endpoints move down by `wall.height ?? preset.lipHeight ?? 0`,
+  converting top coordinates to floor coordinates. Explicit depths are retained.
+- Preset `sillHeight` becomes `sillThickness`. Doors receive the effective wall
+  height. Windows receive `Math.round(height * (windowInset ?? 0.6))` as height.
+- Horizontal window elevations reproduce the old rounded face position. Vertical
+  windows use centered elevations; their old top-only slits have no exact
+  equivalent in the new renderer. Junction extensions can also differ when
+  connected walls have different heights. Review these after import.
+- Openings that cannot fit, including openings on zero-height walls, throw rather
+  than being silently resized. Version 2 still requires explicit opening heights
+  and window `sillHeight`.
+
+Migrating an already migrated map leaves its coordinates unchanged. `setWalls()`
+accepts current `WallSpec[]` only; migrate a full legacy map before passing walls.
 
 ### Wallcraft export extension
 
@@ -269,6 +301,7 @@ construction needs no plugin registration. It is not itself a Game Object; it ow
 | `openDoor(id)` | `(id: string) => this` | Opens a door, reversing a closing animation. |
 | `closeDoor(id)` | `(id: string) => this` | Closes a door, restoring collision immediately. |
 | `toggleDoor(id)` | `(id: string) => this` | Reverses the current target state. |
+| `getDoorSurfaces()` | `() => WallSurface[]` | Current projected door bounds, floor edges, and render depths for character occlusion. Includes moving panels and artwork; fully retracted sliding panels are omitted. Read-only snapshots; request again after animation updates. |
 | `getDoorState(id)` | `(id: string) => DoorState` | Returns `"closed"`, `"opening"`, `"open"`, or `"closing"`. |
 | `destroy()` | `() => void` | Destroys containers and bodies and removes scene listeners. Also runs on scene shutdown. |
 

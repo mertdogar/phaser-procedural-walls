@@ -135,18 +135,19 @@ after the original 0.2.0 release.
 
 ## Upgrade older maps
 
-The current model uses floor-footprint centerlines. Wall height projects upward
-and no longer shifts collision. There is no legacy rendering mode.
+The current format is schema version 2, independent of the npm package version.
+Wallcraft imports and `new WallMap(scene, config)` automatically migrate maps
+marked `"version": 1`. Exports include `"version": 2`.
 
-1. Provide `height` for every door and `height` plus `sillHeight` for every window.
-2. Rename preset `sillHeight` to `sillThickness`. A window's `sillHeight` means
-   distance from the floor to its bottom; preset `sillThickness` is decoration.
-3. Review coordinates. To preserve an old wall's floor position, add its old
-   effective height to both endpoint y coordinates. Review connected walls with
-   different heights individually. Keeping coordinates unchanged treats them as
-   the intended floor plan and raises the walls above it.
-4. Check that openings fit the wall length and height. Invalid openings produce
-   errors rather than resizing themselves.
+Migration shifts endpoints to their floor positions, renames preset `sillHeight`
+to `sillThickness`, and derives opening dimensions from the legacy wall style.
+Review vertical windows and junctions between walls of different heights: the
+new renderer cannot reproduce all legacy geometry exactly.
+
+Unversioned maps are treated as the current format to keep existing 0.5.0 maps
+working. Explicitly mark older, top-origin maps as version 1 before loading them.
+Unsupported versions and invalid openings produce errors. See
+[map migration](docs/api.md#map-schema-migration) for the standalone API and rules.
 
 Opening artwork is optional. Maps without it keep procedural doors and windows.
 The [API reference](docs/api.md) defines the current fields and defaults.
