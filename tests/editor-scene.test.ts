@@ -364,3 +364,72 @@ describe("editor world coordinates", () => {
     expect(scene.fitMap).toHaveBeenCalled();
   });
 });
+
+describe("door editing", () => {
+  it.each([false, true])("drags doors using authored offsets on a reversed=%s wall", (reversed) => {
+    const wall: WallSpec = { x1: reversed ? 320 : 0, y1: 0, x2: reversed ? 0 : 320, y2: 0, thickness: 16, preset: "p", doors: [{ id: "entry", type: "hinged", offset: 64, width: 64 }] };
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
+    emit("pointerdown", pointer(reversed ? 224 : 96, 0));
+    emit("pointerup", pointer(reversed ? 192 : 128, 0));
+    expect(onUpdateWall).toHaveBeenCalledExactlyOnceWith(0, { doors: [{ ...wall.doors![0], offset: 96 }] });
+    expect(wall.doors![0].offset).toBe(64);
+  });
+
+  it("prevents dragging a door over a window and shrinking a wall through a door", () => {
+    const wall: WallSpec = { x1: 0, y1: 0, x2: 320, y2: 0, thickness: 16, preset: "p", windows: [{ offset: 192, width: 64 }], doors: [{ id: "entry", type: "sliding", offset: 64, width: 64 }] };
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
+    emit("pointerdown", pointer(96, 0));
+    emit("pointerup", pointer(224, 0));
+    expect(onUpdateWall).toHaveBeenLastCalledWith(0, { doors: wall.doors });
+    emit("pointerdown", pointer(320, 0));
+    emit("pointerup", pointer(96, 0));
+    expect(onUpdateWall).toHaveBeenLastCalledWith(0, { x1: 0, y1: 0, x2: 320, y2: 0 });
+  });
+
+  it("prevents a window drag from overlapping a door", () => {
+    const wall: WallSpec = { x1: 0, y1: 0, x2: 320, y2: 0, thickness: 16, preset: "p", windows: [{ offset: 192, width: 64 }], doors: [{ id: "entry", type: "sliding", offset: 64, width: 64 }] };
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
+    emit("pointerdown", pointer(224, 0));
+    emit("pointerup", pointer(96, 0));
+    expect(onUpdateWall).toHaveBeenLastCalledWith(0, { windows: wall.windows });
+  });
+
+  it("accounts for projected face height when dragging a vertical door", () => {
+    const wall: WallSpec = { x1: 0, y1: 0, x2: 0, y2: 320, thickness: 16, height: 80, preset: "p", doors: [{ id: "entry", type: "hinged", offset: 64, width: 64 }] };
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
+    emit("pointerdown", pointer(0, 176));
+    emit("pointerup", pointer(0, 208));
+    expect(onUpdateWall).toHaveBeenLastCalledWith(0, { doors: [{ ...wall.doors![0], offset: 96 }] });
+  });
+});
+
+it("spawns near the map center rather than outside the sample's closed perimeter", async () => {
+  const { initialConfig } = await import("../demo/editor-data");
+  const scene = new EditorScene(initialConfig, vi.fn());
+  const spawn = scene["findSpawn"]();
+  expect(spawn.x).toBeGreaterThan(128 + 20);
+  expect(spawn.x).toBeLessThan(832 - 20);
+  expect(spawn.y).toBeGreaterThan(96 + 24);
+  expect(spawn.y).toBeLessThan(544);
+});
+
+it("preview refuses closure on an occupant and permits it after they move away", () => {
+  const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 16, preset: "p", doors: [{ id: "entry", type: "hinged" as const, offset: 96, width: 64 }] }] };
+  const error = vi.fn();
+  const scene = new EditorScene(config, error);
+  const canvas = {};
+  vi.stubGlobal("document", { activeElement: canvas });
+  const toggleDoor = vi.fn();
+  const player = { x: 128, y: 0, body: { x: 119, y: -5, width: 18, height: 10 } };
+  Object.assign(scene, { game: { canvas }, preview: true, player, previewWalls: resolveWalls(config.walls, config.presets), wallMap: { getDoorState: () => "open", toggleDoor } });
+  scene["interactDoor"]({ repeat: false } as KeyboardEvent);
+  expect(toggleDoor).not.toHaveBeenCalled();
+  expect(error).toHaveBeenCalledWith("Step out of the doorway before closing it.");
+  player.y = 32;
+  player.body.y = 22;
+  scene["interactDoor"]({ repeat: false } as KeyboardEvent);
+  expect(toggleDoor).toHaveBeenCalledExactlyOnceWith("entry");
+  scene["interactDoor"]({ repeat: true } as KeyboardEvent);
+  expect(toggleDoor).toHaveBeenCalledTimes(1);
+  vi.unstubAllGlobals();
+});

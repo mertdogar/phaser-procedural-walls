@@ -11,6 +11,26 @@ export interface WallPreset {
   sillHeight?: number;
   texture?: string;
   lipTexture?: string;
+  doorFill?: number;
+  doorFrame?: number;
+}
+
+export type DoorType = "hinged" | "sliding";
+export type DoorState = "closed" | "opening" | "open" | "closing";
+
+export interface DoorSpec {
+  id: string;
+  type: DoorType;
+  offset: number;
+  width: number;
+  open?: boolean;
+  side?: "start" | "end";
+  swing?: "left" | "right";
+}
+
+export interface ResolvedDoor {
+  spec: DoorSpec;
+  collider: Rect;
 }
 
 export interface WindowSpec {
@@ -28,6 +48,7 @@ export interface WallSpec {
   depth?: number;
   preset: string;
   windows?: WindowSpec[];
+  doors?: DoorSpec[];
 }
 
 export interface WallMapConfig {
@@ -53,5 +74,7 @@ export interface ResolvedWall {
   windows: Rect[];
   sills: Rect[];
   collider: Rect;
+  colliderPieces: Rect[];
+  doors: ResolvedDoor[];
   depth: number;
 }

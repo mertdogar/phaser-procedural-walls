@@ -49,6 +49,8 @@ export class EditorScene extends Phaser.Scene {
     this.cursors = this.input.keyboard?.createCursorKeys() ?? null;
     const cancelEdit = () => this.editor.cancel();
     this.input.keyboard?.on("keydown-ESC", cancelEdit);
+    this.input.keyboard?.on("keydown-E", this.interactDoor, this);
+    this.events.once("shutdown", () => this.input.keyboard?.off("keydown-E", this.interactDoor, this));
     this.events.once("shutdown", () => this.input.keyboard?.off("keydown-ESC", cancelEdit));
     this.input.on("pointerdown", this.handlePointerDown, this);
     this.input.on("pointermove", this.handlePointerMove, this);
@@ -127,6 +129,29 @@ export class EditorScene extends Phaser.Scene {
       this.cameras.main.centerOn(this.player.x, this.player.y);
       this.drawGrid();
     }
+  }
+
+  private interactDoor(event: KeyboardEvent): void {
+    if (event.repeat || !this.preview || !this.player || !this.wallMap
+      || document.activeElement !== this.game.canvas) return;
+    const player = this.player;
+    const body = player.body!;
+    const doors = this.previewWalls.flatMap((wall) => wall.doors);
+    const distance = (r: ResolvedWall["collider"]) => Math.hypot(
+      player.x - Phaser.Math.Clamp(player.x, r.x, r.x + r.w),
+      player.y - Phaser.Math.Clamp(player.y, r.y, r.y + r.h),
+    );
+    const nearest = doors.sort((a, b) => distance(a.collider) - distance(b.collider))[0];
+    if (!nearest || distance(nearest.collider) > 64) return;
+    const state = this.wallMap.getDoorState(nearest.spec.id);
+    const r = nearest.collider;
+    if ((state === "open" || state === "opening") && body.x < r.x + r.w
+      && body.x + body.width > r.x && body.y < r.y + r.h && body.y + body.height > r.y) {
+      this.onTextureError("Step out of the doorway before closing it.");
+      return;
+    }
+    this.onTextureError("");
+    this.wallMap.toggleDoor(nearest.spec.id);
   }
 
   private getPlayerDepth(): number {
@@ -268,7 +293,8 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private findSpawn(): Phaser.Math.Vector2 {
-    const colliders = resolveWalls(this.configData.walls, this.configData.presets).map((wall) => wall.collider);
+    const colliders = resolveWalls(this.configData.walls, this.configData.presets)
+      .flatMap((wall) => [...wall.colliderPieces, ...wall.doors.filter((door) => !door.spec.open).map((door) => door.collider)]);
     const bounds = getMapBounds(this.configData);
     const center = new Phaser.Math.Vector2(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     const isFree = (point: Phaser.Math.Vector2) => colliders.every((rect) => (
@@ -278,12 +304,14 @@ export class EditorScene extends Phaser.Scene {
       || point.y - 10 >= rect.y + rect.h
     ));
     if (isFree(center)) return center;
+    let nearest: Phaser.Math.Vector2 | null = null;
     for (let y = bounds.y + GRID_SIZE; y < bounds.y + bounds.height; y += GRID_SIZE) {
       for (let x = bounds.x + GRID_SIZE; x < bounds.x + bounds.width; x += GRID_SIZE) {
         const point = new Phaser.Math.Vector2(x, y);
-        if (isFree(point)) return point;
+        if (isFree(point) && (!nearest
+          || Math.hypot(x - center.x, y - center.y) < Math.hypot(nearest.x - center.x, nearest.y - center.y))) nearest = point;
       }
     }
-    return center;
+    return nearest ?? center;
   }
 }

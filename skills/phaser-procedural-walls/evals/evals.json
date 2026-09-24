@@ -31,7 +31,7 @@
       "expectations": [
         "Imports resolveWalls from @mertdogar/phaser-procedural-walls/geometry, not the package root.",
         "Computes window x 260, collider {x:0,y:142,w:400,h:8}, and depth 150.",
-        "Explains that windows are not passable and a doorway requires a gap between wall segments."
+        "Explains that windows are not passable and functional doors are separate wall-owned entities that open and close."
       ]
     }
   ]

@@ -4,7 +4,7 @@ The renderer and types are available from the package root:
 
 ```ts
 import { WallEditor, WallMapPlugin, WallMap, resolveWalls } from "@mertdogar/phaser-procedural-walls";
-import type { WallMapConfig, WallSpec, WallPreset, WindowSpec, ResolvedWall, Rect } from "@mertdogar/phaser-procedural-walls";
+import type { WallMapConfig, WallSpec, WallPreset, WindowSpec, DoorSpec, DoorType, DoorState, ResolvedDoor, ResolvedWall, Rect } from "@mertdogar/phaser-procedural-walls";
 ```
 
 For server-side geometry without importing Phaser, use the dedicated entry point:
@@ -35,7 +35,7 @@ Pass these fields when you construct the editor:
 | `tool` | Required | `"wall"` to draw or `"select"` to select and drag handles. |
 | `onAddWall(wall)` | Required | Requests adding a `WallSpec` after a draw gesture finishes. |
 | `onSelectWall(index)` | Required | Requests selecting a wall, or clearing selection with `null`. |
-| `onUpdateWall(index, patch)` | Required | Requests a whole-wall, endpoint, or window-offset edit when a drag finishes. |
+| `onUpdateWall(index, patch)` | Required | Requests a whole-wall, endpoint, window-offset, or door-offset edit when a drag finishes. |
 | `enabled` | `true` | Whether editing input and the overlay are active. |
 | `camera` | `scene.cameras.main` | Camera used to convert pointer coordinates and size handles. |
 | `gridSize` | `32` | Positive, finite world-unit snap step and minimum drawn wall length. |
@@ -58,7 +58,7 @@ Use these methods to connect your application's controls:
 | `setState({ config, selectedIndex, tool, enabled? })` | Supplies the current accepted state. A changed config reference, selection, tool, or enabled state cancels any unfinished gesture. Omitted `enabled` means `true`. |
 | `setNewWall({ preset?, thickness?, height? })` | Replaces new-wall defaults. Omitted thickness resets to `16`; omitted preset restores automatic selection. |
 | `cancel()` | Discards the unfinished gesture without an edit callback. Wire your Escape key to it. |
-| `dragging` | Whether a drawing, whole-wall, endpoint, or window gesture is in progress. |
+| `dragging` | Whether a drawing, whole-wall, endpoint, window, or door gesture is in progress. |
 | `refresh()` | Redraws the overlay, for example after changing camera zoom. |
 | `destroy()` | Removes the component's input and shutdown listeners and destroys its overlay. Called automatically on scene shutdown. |
 
@@ -71,8 +71,8 @@ cameras render the overlay.
 
 Starting with 0.4.1, dragging the selected wall's green centerline
 moves the entire segment. Both endpoints receive the same grid-snapped delta,
-preserving length, orientation, off-grid alignment, and window offsets. Endpoint
-and window handles take priority; connected segments stay fixed. A translucent,
+preserving length, orientation, off-grid alignment, and opening offsets. Endpoint
+and opening handles take priority; connected segments stay fixed. A translucent,
 non-colliding preview follows the drag without changing accepted data. Release
 requests one coordinate patch, or none if the wall returns to its original
 position. Cancellation, state changes, and destruction discard the preview.
@@ -111,7 +111,8 @@ Import `WallEditorTool` and `WallSpec` as types from the package root. The
 deletion, preset and dimension controls, window creation/removal, and cleanup.
 
 Validate proposed edits before accepting them if your application has placement
-rules. The component doesn't validate world bounds, occupants, connectivity,
+rules. Door drags, window drags, and endpoint edits reject changes that would
+place doors outside the wall or overlap another opening. The component does not validate world bounds, occupants, connectivity,
 window overlap, or windows extending past a resized wall. To refuse an edit,
 keep the current config and show your own message. Feed authoritative replacement
 configs through `setState` to cancel gestures based on stale data.
@@ -164,6 +165,7 @@ The upload control accepts files up to 5 MB each. Images repeat at their origina
 | `depth` | `number` | no | Explicit Phaser drawing depth for this wall. Defaults to the wall's south edge. Higher values draw later. |
 | `preset` | `string` | yes | Key into `presets`. Unknown keys throw. |
 | `windows` | `WindowSpec[]` | no | Windows along this wall. |
+| `doors` | `DoorSpec[]` | no | Functional doors along this wall. |
 
 ### WindowSpec
 
@@ -171,6 +173,41 @@ The upload control accepts files up to 5 MB each. Images repeat at their origina
 | --- | --- | --- |
 | `offset` | `number` | Distance in world units from the wall's `(x1, y1)` end to the window's near edge, measured before any endpoint normalization. |
 | `width` | `number` | Window width along the wall. |
+
+### DoorSpec
+
+Doors belong to their wall and use its preset. Each ID must be non-empty and
+unique across the map. Invalid IDs, types, placement, or option values throw.
+Doors must fit within the authored segment and cannot overlap a window or
+another door on that segment. Touching opening edges are allowed.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | Required | Stable, map-wide unique identifier. |
+| `type` | `DoorType` | Required | `"hinged"` or `"sliding"`. |
+| `offset` | `number` | Required | Nonnegative distance from the authored wall start to the near edge. |
+| `width` | `number` | Required | Positive, finite passage width along the wall. |
+| `open` | `boolean` | `false` | Authored starting state, restored on rebuild. |
+| `side` | `"start" \| "end"` | `"start"` | Hinge end or sliding retraction side, relative to authored wall direction. |
+| `swing` | `"left" \| "right"` | `"left"` | Hinged swing side when looking from `(x1, y1)` toward `(x2, y2)`. Ignored for sliding doors. |
+
+Hinged doors rotate 90 degrees. Sliding doors disappear into the chosen side,
+clipped to the doorway; they need no adjacent pocket space. Both take 250 ms for
+a full transition. Reversing direction preserves the current position and speed.
+For an eastbound wall, left swings north; for a southbound wall, left swings east.
+Reversed endpoints preserve these authored directions through normalization.
+
+```ts
+const wallMap = this.add.wallMap({
+  presets: { interior: { fill: 0xe7ded0, edge: 0x3c403a, doorFill: 0x99734f } },
+  walls: [{
+    x1: 0, y1: 0, x2: 320, y2: 0, thickness: 16, preset: "interior",
+    doors: [{ id: "kitchen-door", type: "hinged", offset: 112, width: 96 }],
+  }],
+  collide: true,
+});
+wallMap.openDoor("kitchen-door");
+```
 
 ### WallPreset
 
@@ -183,6 +220,8 @@ The upload control accepts files up to 5 MB each. Images repeat at their origina
 | `lipFill` | `number` | `fill` | Face color. Ignored when `lipTexture` is set. |
 | `texture` | `string` | none | Texture key tiled across the body with a TileSprite. |
 | `lipTexture` | `string` | none | Texture key tiled across the face. |
+| `doorFill` | `number` | `0x99734f` | Door panel color. |
+| `doorFrame` | `number` | `edge` | Door frame and panel outline color. |
 | `windowFill` | `number` | `0x3d7f88` | Glass color. |
 | `windowAlpha` | `number` | `0.5` | Glass alpha. `1` makes windows opaque. |
 | `windowFrame` | `number` | none | When set, a 1px frame is stroked around each window. |
@@ -193,18 +232,31 @@ Texture keys must exist in the scene's Texture Manager before `wallMap` is calle
 
 ## WallMap
 
-The handle returned by the factory. It is not itself a Game Object; it owns one Container per wall.
+The handle returned by the factory. It is not itself a Game Object; it owns wall and door Containers.
 
 | member | type | description |
 | --- | --- | --- |
 | `scene` | `Phaser.Scene` | Owning scene. |
-| `containers` | `Phaser.GameObjects.Container[]` | One per wall, in input order. Depth is the wall's explicit `depth`, or its south edge when unset. |
+| `containers` | `Phaser.GameObjects.Container[]` | Wall containers in input order, each followed by its door containers. Door panels use their floor position for depth unless the wall overrides `depth`. |
 | `bodies` | `Phaser.Physics.Arcade.StaticGroup \| null` | Static bodies when `collide` was true, otherwise `null`. Pass to `physics.add.collider`. |
 | `setWalls(walls)` | `(walls: WallSpec[]) => this` | Replaces the wall list and rebuilds everything. |
 | `redraw()` | `() => this` | Rebuilds with the current config. Call after changing texture contents. |
-| `destroy()` | `() => void` | Destroys all containers and bodies. |
+| `openDoor(id)` | `(id: string) => this` | Opens a door, reversing a closing animation. |
+| `closeDoor(id)` | `(id: string) => this` | Closes a door, restoring collision immediately. |
+| `toggleDoor(id)` | `(id: string) => this` | Reverses the current target state. |
+| `getDoorState(id)` | `(id: string) => DoorState` | Returns `"closed"`, `"opening"`, `"open"`, or `"closing"`. |
+| `destroy()` | `() => void` | Destroys containers and bodies and removes scene listeners. Also runs on scene shutdown. |
 
-There is no incremental API. Any change rebuilds all walls.
+Door methods update existing objects without replacing physics groups. Repeating
+the current target is a no-op; unknown IDs throw. The doorway stays blocked until
+fully open and becomes blocked as soon as closing starts. The moving panel has
+no physical collision. With `collide: false`, visuals and state still work.
+
+The consuming game owns interaction triggers and checks occupants before closing.
+No automatic obstruction checks, locks, or save-game behavior are provided.
+Runtime changes do not mutate authored `open` values. `setWalls()` and `redraw()`
+reset doors to their authored state and replace physics groups; rebind your Arcade
+colliders after either operation.
 
 ## Geometry exports
 
@@ -222,11 +274,13 @@ Normalizes each wall, computes endpoint extensions, and produces every rectangle
 | `horizontal` | `boolean` | `true` when `y1 === y2`. |
 | `body` | `Rect` | Wall top including endpoint extensions. |
 | `lip` | `Rect \| null` | Face below the body, `null` when the effective height (`height` override or preset `lipHeight`) is zero or negative. |
-| `bodyPieces` | `Rect[]` | Body with window holes cut out. |
-| `lipPieces` | `Rect[]` | Face with window holes cut out. |
+| `bodyPieces` | `Rect[]` | Body with window and door holes cut out. |
+| `lipPieces` | `Rect[]` | Face with window and door holes cut out. |
 | `windows` | `Rect[]` | Glass rectangles. |
 | `sills` | `Rect[]` | Sill rectangles, face windows only. |
-| `collider` | `Rect` | Static body rectangle. See [How it works](how-it-works.md#collision). |
+| `collider` | `Rect` | Uncut footprint bounding rectangle; includes doorways. See [How it works](how-it-works.md#collision). |
+| `colliderPieces` | `Rect[]` | Permanent wall colliders, excluding doorways. |
+| `doors` | `ResolvedDoor[]` | Normalized door `spec` and its doorway `collider`. Add that blocker unless the door is fully open. |
 | `depth` | `number` | Effective Container depth: the wall override when present, otherwise its south edge. |
 
 ### cutRects(rect, holes, horizontal): Rect[]

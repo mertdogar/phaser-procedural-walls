@@ -60,5 +60,6 @@ export function WallCanvas({ config, selectedIndex, tool, preview, onAddWall, on
       <Button variant="ghost" size="sm" aria-label="Zoom in" onClick={() => sceneRef.current?.zoomBy(1.25)}>+</Button>
     </div>
     {textureError && <p role="alert" className="absolute bottom-16 left-8 rounded border bg-background p-3 text-sm text-destructive">{textureError}</p>}
+    {preview && <p className="absolute top-4 left-4 rounded border bg-background p-2 text-sm">Arrow keys to move · E near a door to open or close</p>}
   </>;
 }

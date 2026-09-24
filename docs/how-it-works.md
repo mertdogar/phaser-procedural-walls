@@ -6,7 +6,7 @@ This page explains the decisions behind the plugin so you can predict what it wi
 
 A wall is a centerline segment plus a thickness. The renderer turns that into two rectangles: the **body**, which is the wall top seen from above, and the **lip**, a face drawn directly below the body. The lip is what makes a wall read as tall in a top-down view. It is purely cosmetic in world space: it does not shift the wall, it hangs south of it.
 
-Only axis-aligned walls are supported. That keeps every shape a rectangle, which is what makes the rest of this page short.
+Only axis-aligned walls are supported. Wall geometry stays rectangular; hinged door panels can rotate.
 
 ## Corners and T-junctions
 
@@ -46,7 +46,7 @@ This logic is editor-only; exporting JSON does not add it to your game.
 
 ## Collision
 
-When `collide` is on, each wall gets a static body matching its bottom
+When `collide` is on, each wall gets static bodies matching its bottom
 footprint: the wall body rectangle shifted south by its face height. Horizontal
 footprints retain the wall thickness; vertical footprints retain the wall length
 and thickness, including junction extensions. The raised face is not solid space.
@@ -61,13 +61,27 @@ This lets a character pass behind a raised wall and keeps doorway gaps between
 vertical segments open at their projected floor positions. Segments with different
 face heights have different floor offsets; use matching heights for aligned gaps.
 
-The `collider` rectangle is computed in the geometry module, so you can read it from `resolveWalls` if you use a physics engine other than Arcade.
+For another physics engine, read `colliderPieces` from `resolveWalls` for the
+permanent wall shapes, plus each resolved door's `collider` when it blocks passage.
+The existing `collider` field is the uncut footprint bounding rectangle.
 
 ## Windows
 
 Windows on a wall with a lip are cut into the face; walls without a lip, and vertical walls, put the window into the body instead. A window is a real hole: the face is drawn as up to four tiled pieces around each window, and a translucent glass rectangle is painted over the gap. Anything drawn beneath the wall shows through with the glass tint. This is why the character behind the wall is visible in the window above.
 
 A **sill** is drawn at the bottom of each face window, using the body fill or texture. It is opaque, sits above the glass, and gives the window a horizontal surface to sit on. Window coordinates are rounded to whole pixels so the tiled pieces meet without visible seams.
+
+## Doors
+
+Doors are wall-owned passages with independent IDs and runtime state. Geometry
+cuts the wall visuals and footprint around each passage. A separate static body
+blocks each doorway until its door is fully open; closing restores it immediately.
+Hinged panels rotate 90 degrees, while sliding panels retract out of sight within
+the doorway. Panels are visual and cannot push characters.
+
+The game calls door methods and checks occupancy before closing. Direction changes
+reverse the current animation without queuing commands. Rebuilding walls restores
+the authored starting state. See the [door API](api.md#doorspec) for schema details.
 
 ## Textures
 
@@ -85,7 +99,6 @@ Preset edits affect every wall that references that preset. Renaming a preset up
 
 ## What the plugin does not do
 
-- Doors. Leave a gap between two wall segments instead.
 - Diagonal walls or curved walls.
-- Incremental updates. Changing anything rebuilds every wall.
+- Incremental wall geometry updates. Door operations are incremental; wall edits rebuild the map.
 - Tracking character depth. One line in your update loop does that.

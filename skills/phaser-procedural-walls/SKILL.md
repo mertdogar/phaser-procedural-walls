@@ -44,8 +44,9 @@ These details prevent integrations that compile but render or collide wrongly.
   finite, thickness positive, and endpoints distinct. Diagonals aren't supported.
 - Every wall names an existing preset. Window offsets start at the original
   first endpoint; keep positive widths inside the segment and avoid overlaps.
-- Windows are visual openings, not passable doors. Represent a doorway with
-  separate wall segments and a gap.
+- Windows remain solid for collision. Functional doors use wall-owned `doors`
+  entries with unique IDs and `type: "hinged" | "sliding"`. The game controls
+  opening and closing and checks occupancy before closure.
 - `height` overrides preset `lipHeight`; it changes the face and collision
   position. `depth` changes draw order only. Don't change height to fix ordering.
 - Register the scene plugin before calling `this.add.wallMap(config)`.
@@ -59,7 +60,7 @@ These details prevent integrations that compile but render or collide wrongly.
 
 ## Scope and handoff
 
-Give concrete consumer-facing examples. Don't invent doors, diagonal walls,
+Give concrete consumer-facing examples. Don't invent diagonal walls,
 texture scaling, spritesheet-frame presets, incremental wall setters, or a
 headless editor CLI. If a requested feature isn't supported, explain the
 constraint and offer the smallest compatible approach.

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { resolveWalls } from "./geometry";
+import { resolveWalls, validateDoors } from "./geometry";
 import { WallMap } from "./WallMap";
 import type { WallMapConfig, WallSpec, WindowSpec } from "./types";
 
@@ -31,9 +31,10 @@ interface AnchorDrag {
   wall: WallSpec;
 }
 
-interface WindowDrag {
+interface OpeningDrag {
   index: number;
-  windowIndex: number;
+  openingIndex: number;
+  kind: "windows" | "doors";
   wall: WallSpec;
 }
 
@@ -57,7 +58,7 @@ export class WallEditor {
   private drawStart: Phaser.Math.Vector2 | null = null;
   private pointerPosition: Phaser.Math.Vector2 | null = null;
   private anchorDrag: AnchorDrag | null = null;
-  private windowDrag: WindowDrag | null = null;
+  private openingDrag: OpeningDrag | null = null;
   private wallDrag: WallDrag | null = null;
   private wallPreview: WallMap | null = null;
 
@@ -95,14 +96,14 @@ export class WallEditor {
   }
 
   get dragging(): boolean {
-    return Boolean(this.drawStart || this.anchorDrag || this.windowDrag || this.wallDrag);
+    return Boolean(this.drawStart || this.anchorDrag || this.openingDrag || this.wallDrag);
   }
 
   cancel(): void {
     this.drawStart = null;
     this.pointerPosition = null;
     this.anchorDrag = null;
-    this.windowDrag = null;
+    this.openingDrag = null;
     this.wallDrag = null;
     this.wallPreview?.destroy();
     this.wallPreview = null;
@@ -136,11 +137,11 @@ export class WallEditor {
         this.scene.input.setDefaultCursor("grabbing");
         return;
       }
-      const windowIndex = this.findWindow(pointer.worldX, pointer.worldY);
-      if (windowIndex !== null && this.selectedIndex !== null) {
-        this.windowDrag = {
+      const opening = this.findOpening(pointer.worldX, pointer.worldY);
+      if (opening !== null && this.selectedIndex !== null) {
+        this.openingDrag = {
           index: this.selectedIndex,
-          windowIndex,
+          ...opening,
           wall: { ...this.configData.walls[this.selectedIndex] },
         };
         this.scene.input.setDefaultCursor("grabbing");
@@ -174,10 +175,11 @@ export class WallEditor {
       this.refresh();
       return;
     }
-    if (this.windowDrag && pointer.isDown) {
-      this.windowDrag.wall = this.moveWindow(
-        this.windowDrag.wall,
-        this.windowDrag.windowIndex,
+    if (this.openingDrag && pointer.isDown) {
+      this.openingDrag.wall = this.moveOpening(
+        this.openingDrag.wall,
+        this.openingDrag.openingIndex,
+        this.openingDrag.kind,
         pointer.worldX,
         pointer.worldY,
       );
@@ -194,8 +196,8 @@ export class WallEditor {
       return;
     }
     if (this.tool === "select" && !pointer.isDown) {
-      const windowIndex = this.findWindow(pointer.worldX, pointer.worldY);
-      if (windowIndex !== null && this.selectedIndex !== null) {
+      const opening = this.findOpening(pointer.worldX, pointer.worldY);
+      if (opening !== null && this.selectedIndex !== null) {
         const wall = this.configData.walls[this.selectedIndex];
         this.scene.input.setDefaultCursor(wall.y1 === wall.y2 ? "ew-resize" : "ns-resize");
       } else {
@@ -220,12 +222,12 @@ export class WallEditor {
       }
       return;
     }
-    if (this.windowDrag) {
-      const drag = this.windowDrag;
-      const wall = this.moveWindow(drag.wall, drag.windowIndex, pointer.worldX, pointer.worldY);
-      this.windowDrag = null;
+    if (this.openingDrag) {
+      const drag = this.openingDrag;
+      const wall = this.moveOpening(drag.wall, drag.openingIndex, drag.kind, pointer.worldX, pointer.worldY);
+      this.openingDrag = null;
       this.scene.input.setDefaultCursor("default");
-      this.callbacks.onUpdateWall(drag.index, { windows: wall.windows });
+      this.callbacks.onUpdateWall(drag.index, { [drag.kind]: wall[drag.kind] });
       this.refresh();
       return;
     }
@@ -274,7 +276,7 @@ export class WallEditor {
     this.overlay.clear();
     if (!this.enabled) return;
     const wall = this.wallDrag?.preview
-      ?? this.windowDrag?.wall
+      ?? this.openingDrag?.wall
       ?? this.anchorDrag?.wall
       ?? (this.selectedIndex === null ? null : this.configData.walls[this.selectedIndex]);
     if (wall) {
@@ -282,8 +284,8 @@ export class WallEditor {
       this.overlay.lineStyle(4, 0x2d7a4c, 1).lineBetween(wall.x1, wall.y1, wall.x2, wall.y2);
       this.overlay.fillStyle(0xffffff, 1).fillCircle(wall.x1, wall.y1, radius).fillCircle(wall.x2, wall.y2, radius);
       this.overlay.lineStyle(3 / this.camera.zoom, 0x2d7a4c, 1).strokeCircle(wall.x1, wall.y1, radius).strokeCircle(wall.x2, wall.y2, radius);
-      for (const [index, rect] of this.getWindowRects(wall).entries()) {
-        const active = this.windowDrag?.windowIndex === index;
+      for (const { rect, kind, openingIndex } of this.getOpeningRects(wall)) {
+        const active = this.openingDrag?.openingIndex === openingIndex && this.openingDrag?.kind === kind;
         this.overlay.fillStyle(active ? 0x2d7a4c : 0xffffff, active ? 0.35 : 0.75).fillRect(rect.x, rect.y, rect.w, rect.h);
         this.overlay.lineStyle(3, 0x2d7a4c, 1).strokeRect(rect.x, rect.y, rect.w, rect.h);
       }
@@ -340,40 +342,42 @@ export class WallEditor {
     return startDistance <= endDistance ? "start" : "end";
   }
 
-  private findWindow(x: number, y: number): number | null {
+  private findOpening(x: number, y: number): { openingIndex: number; kind: "windows" | "doors" } | null {
     if (this.selectedIndex === null) return null;
     const wall = this.configData.walls[this.selectedIndex];
     if (!wall) return null;
     const padding = 10 / this.camera.zoom;
-    const index = this.getWindowRects(wall).findIndex((rect) => (
-      x >= rect.x - padding
-      && x <= rect.x + rect.w + padding
-      && y >= rect.y - padding
-      && y <= rect.y + rect.h + padding
-    ));
-    return index === -1 ? null : index;
+    return this.getOpeningRects(wall).find(({ rect }) => (
+      x >= rect.x - padding && x <= rect.x + rect.w + padding
+      && y >= rect.y - padding && y <= rect.y + rect.h + padding
+    )) ?? null;
   }
 
-  private getWindowRects(wall: WallSpec) {
-    return resolveWalls([wall], this.configData.presets)[0]?.windows ?? [];
+  private getOpeningRects(wall: WallSpec) {
+    const resolved = resolveWalls([wall], this.configData.presets)[0];
+    return [
+      ...resolved.windows.map((rect, openingIndex) => ({ rect, openingIndex, kind: "windows" as const })),
+      ...resolved.doors.map((door, openingIndex) => ({ rect: door.collider, openingIndex, kind: "doors" as const })),
+    ];
   }
 
-  private moveWindow(wall: WallSpec, windowIndex: number, x: number, y: number): WallSpec {
-    const windows = wall.windows?.map((window) => ({ ...window })) ?? [];
-    const window = windows[windowIndex];
-    if (!window) return wall;
+  private moveOpening(wall: WallSpec, openingIndex: number, kind: "windows" | "doors", x: number, y: number): WallSpec {
+    const openings = wall[kind]?.map((opening) => ({ ...opening })) ?? [];
+    const opening = openings[openingIndex];
+    if (!opening) return wall;
     const horizontal = wall.y1 === wall.y2;
     const direction = horizontal ? Math.sign(wall.x2 - wall.x1) || 1 : Math.sign(wall.y2 - wall.y1) || 1;
-    const pointerOffset = horizontal ? (x - wall.x1) * direction : (y - wall.y1) * direction;
+    const height = kind === "doors" && !horizontal ? Math.max(0, wall.height ?? this.configData.presets[wall.preset].lipHeight ?? 0) : 0;
+    const pointerOffset = horizontal ? (x - wall.x1) * direction : (y - height - wall.y1) * direction;
     const length = Math.abs(wall.x2 - wall.x1) + Math.abs(wall.y2 - wall.y1);
-    const maxOffset = Math.max(0, length - window.width);
     const offset = Phaser.Math.Clamp(
-      Math.round((pointerOffset - window.width / 2) / this.gridSize) * this.gridSize,
-      0,
-      maxOffset,
+      Math.round((pointerOffset - opening.width / 2) / this.gridSize) * this.gridSize,
+      0, Math.max(0, length - opening.width),
     );
-    windows[windowIndex] = { ...window, offset } satisfies WindowSpec;
-    return { ...wall, windows };
+    openings[openingIndex] = { ...opening, offset } satisfies WindowSpec;
+    const next = { ...wall, [kind]: openings };
+    try { validateDoors([next]); } catch { return wall; }
+    return next;
   }
 
   private moveEndpoint(wall: WallSpec, endpoint: "start" | "end", point: Phaser.Math.Vector2): WallSpec {
@@ -381,9 +385,11 @@ export class WallEditor {
       ? new Phaser.Math.Vector2(wall.x2, wall.y2)
       : new Phaser.Math.Vector2(wall.x1, wall.y1);
     const moved = this.axisLock(fixed, point);
-    return endpoint === "start"
+    const next = endpoint === "start"
       ? { ...wall, x1: moved.x, y1: moved.y }
       : { ...wall, x2: moved.x, y2: moved.y };
+    try { validateDoors([next]); } catch { return wall; }
+    return next;
   }
 
   private snapPoint(x: number, y: number): Phaser.Math.Vector2 {

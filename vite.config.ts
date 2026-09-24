@@ -5,6 +5,7 @@ import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig(({ mode }) => ({
   root: "demo",
+  server: { port: 7070 },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { "@": fileURLToPath(new URL("./demo", import.meta.url)) },

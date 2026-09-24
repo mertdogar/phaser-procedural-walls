@@ -103,5 +103,7 @@ surface changed to a solid color in the editor.
 
 The library doesn't consume the image dictionary automatically. Follow
 [Phaser integration](integration.md#load-wallcraft-textures) to preload these
-assets, then construct the map. A doorway needs a gap between wall segments;
-window openings remain solid for collisions.
+assets, then construct the map. Add functional hinged or sliding doors in the
+wall inspector; window openings remain solid for collisions. Door fields and
+preset colors survive JSON round trips. Press E near a door in preview to toggle
+it; the preview refuses closure while the player occupies its doorway.

@@ -9,6 +9,7 @@ A Phaser 4 scene plugin that draws top-down floorplan walls from a few lines of 
 - Axis-aligned wall segments with automatic corner and T-junction filling
 - Per-wall style presets: flat colors or tiled textures for the wall top and its face
 - Windows cut into the face with translucent glass and an opaque sill
+- Functional hinged and sliding doors with IDs, animation, and doorway collision
 - One depth-sorted Container per wall; use `sprite.setDepth(sprite.y)` with automatic wall depths
 - Optional Arcade static bodies matching each wall's bottom footprint
 - Pure geometry module with unit tests, no Phaser needed to test it
@@ -43,7 +44,7 @@ pnpm install
 pnpm dev
 ```
 
-Open the localhost URL printed in the terminal. The packaged editor selects an available port; append `--port 8080` to choose one. Draw a wall, switch to Select to edit it, or open **Presets** to change shared styles. **Preview** adds a character controlled with the arrow keys. Press Ctrl+C in the terminal to stop the server.
+Open the localhost URL printed in the terminal. The packaged editor selects an available port; append `--port 8080` to choose one. Draw a wall, switch to Select to edit it, or open **Presets** to change shared styles. **Preview** adds a character controlled with the arrow keys; press **E** near a door to open or close it. Press Ctrl+C in the terminal to stop the server.
 
 Wallcraft is an in-memory prototype, bundled alongside the Phaser library. Export your JSON before closing or reloading the page. See the [Wallcraft guide](docs/wallcraft.md) for editing, textures, and loading an exported map in a game.
 

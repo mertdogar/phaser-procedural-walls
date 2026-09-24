@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveWalls } from "../src/geometry";
-import type { WallPreset, WallSpec } from "../src/types";
+import type { DoorSpec, WallPreset, WallSpec } from "../src/types";
 import type { WallMapConfig } from "./editor-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,7 +44,7 @@ import { initialConfig, parseWallConfig, serializeWallConfig } from "./editor-da
 
 export default function App() {
   const [config, setConfig] = useState<WallMapConfig>(initialConfig);
-  const [tool, setTool] = useState<EditorTool>("wall");
+  const [tool, setTool] = useState<EditorTool>("select");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [history, setHistory] = useState<WallMapConfig[]>([]);
   const [future, setFuture] = useState<WallMapConfig[]>([]);
@@ -53,8 +53,14 @@ export default function App() {
   const [importOpen, setImportOpen] = useState(false);
   const [importValue, setImportValue] = useState(serializeWallConfig(initialConfig));
   const [importError, setImportError] = useState("");
+  const [editError, setEditError] = useState("");
 
   const commitConfig = useCallback((next: WallMapConfig) => {
+    try { resolveWalls(next.walls, next.presets); } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Invalid wall configuration");
+      return;
+    }
+    setEditError("");
     setConfig((current) => {
       setHistory((items) => [...items.slice(-24), current]);
       return next;
@@ -74,11 +80,8 @@ export default function App() {
   }, []);
 
   const updateWall = useCallback((index: number, patch: Partial<WallSpec>) => {
-    setConfig((current) => {
-      const walls = current.walls.map((wall, wallIndex) => wallIndex === index ? { ...wall, ...patch } : wall);
-      return { ...current, walls };
-    });
-  }, []);
+    commitConfig({ ...config, walls: config.walls.map((wall, wallIndex) => wallIndex === index ? { ...wall, ...patch } : wall) });
+  }, [config, commitConfig]);
 
   const deleteSelected = useCallback(() => {
     if (selectedIndex === null) return;
@@ -179,6 +182,7 @@ export default function App() {
       commitConfig({ ...config, walls: [...config.walls, {
         ...wall, x1: wall.x1 + 32, y1: wall.y1 + 32, x2: wall.x2 + 32, y2: wall.y2 + 32,
         windows: wall.windows?.map((window) => ({ ...window })),
+        doors: wall.doors?.map((door) => ({ ...door, id: crypto.randomUUID() })),
       }] });
       setSelectedIndex(config.walls.length);
       setTool("select");
@@ -208,6 +212,7 @@ export default function App() {
   return (
     <TooltipProvider>
       <Editor {...editorProps} />
+      {editError && <p role="alert" className="fixed bottom-4 left-4 z-50 rounded border bg-background p-3 text-sm text-destructive">{editError}</p>}
       <Dialog open={presetsOpen} onOpenChange={setPresetsOpen}>
         <DialogContent className="max-h-[90vh] overflow-auto sm:max-w-2xl">
           <DialogHeader>
@@ -407,8 +412,8 @@ function EditorHelp() {
           {[
             ["Pan", "Two-finger scroll on a trackpad, scroll with a mouse, or drag with the middle mouse button."],
             ["Zoom", "Pinch on a trackpad, use Ctrl + mouse wheel, or click the − and + buttons. Fit map frames the full layout."],
-            ["Edit", "Use the wall tool to draw on the 32 px grid. Select a wall, then drag its green line to move it, its endpoints to resize, or its windows to reposition them. Escape cancels a drag."],
-            ["Preview", "Click Preview, then use the arrow keys to move the character. Wall collisions are enabled. Exit preview to resume editing."],
+            ["Edit", "Use the wall tool to draw on the 32 px grid. Select a wall, then drag its green line to move it, its endpoints to resize, or its windows and doors to reposition them. Escape cancels a drag."],
+            ["Preview", "Click Preview, then use the arrow keys to move the character. Press E near a door to open or close it. Wall collisions are enabled. Exit preview to resume editing."],
             ["Save", "Export JSON before closing or reloading. Your map is kept in memory, not saved automatically."],
           ].map(([label, description]) => (
             <div key={label} className="flex flex-col gap-1">
@@ -524,6 +529,15 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
   };
   const automaticDepth = resolveWalls(config.walls, config.presets)[selectedIndex]?.depth ?? 0;
   const wallLength = Math.abs(wall.x2 - wall.x1) + Math.abs(wall.y2 - wall.y1);
+  const updateDoor = (doorIndex: number, patch: Partial<DoorSpec>) => {
+    onUpdateWall(selectedIndex, { doors: wall.doors?.map((door, index) => index === doorIndex ? { ...door, ...patch } : door) });
+  };
+  const occupied = [...(wall.windows ?? []), ...(wall.doors ?? [])].sort((a, b) => a.offset - b.offset);
+  let doorOffset = 0;
+  for (const opening of occupied) {
+    if (opening.offset - doorOffset >= 64) break;
+    doorOffset = Math.max(doorOffset, opening.offset + opening.width);
+  }
   const updateWindow = (windowIndex: number, key: "offset" | "width", value: string) => {
     const number = Number(value);
     const window = wall.windows?.[windowIndex];
@@ -633,6 +647,60 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
             ))}
           </FieldGroup>
         )}
+      </Field>
+      <Field>
+        <div className="flex items-center justify-between rounded-md border px-3 py-2">
+          <div>
+            <FieldLabel>Doors</FieldLabel>
+            <FieldDescription>{wall.doors?.length ?? 0} doors · drag on the map</FieldDescription>
+          </div>
+          <Button variant="outline" size="xs" disabled={doorOffset + 64 > wallLength} onClick={() => {
+            onUpdateWall(selectedIndex, { doors: [...(wall.doors ?? []), { id: crypto.randomUUID(), type: "hinged", offset: doorOffset, width: 64 }] });
+          }}><PlusIcon data-icon="inline-start" />Add door</Button>
+        </div>
+        {doorOffset + 64 > wallLength && <FieldDescription>Make room for a 64 px doorway to add a door.</FieldDescription>}
+        {wall.doors?.map((door, index) => (
+          <FieldGroup key={door.id} className="gap-3 rounded border p-3">
+            <Field>
+              <FieldLabel htmlFor={`door-${index}-id`}>Door {index + 1} ID</FieldLabel>
+              <Input id={`door-${index}-id`} defaultValue={door.id} onBlur={(event) => { if (event.target.value !== door.id) updateDoor(index, { id: event.target.value }); }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`door-${index}-type`}>Type</FieldLabel>
+              <Select value={door.type} onValueChange={(type) => updateDoor(index, { type: type as DoorSpec["type"] })}>
+                <SelectTrigger id={`door-${index}-type`} className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="hinged">Hinged</SelectItem><SelectItem value="sliding">Sliding</SelectItem></SelectContent>
+              </Select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              {(["offset", "width"] as const).map((key) => (
+                <Field key={key}>
+                  <FieldLabel htmlFor={`door-${index}-${key}`}>{key === "offset" ? "Offset (px)" : "Width (px)"}</FieldLabel>
+                  <Input id={`door-${index}-${key}`} type="number" min={key === "offset" ? 0 : 1} step="1" value={door[key]} onChange={(event) => {
+                    if (event.target.value !== "") updateDoor(index, { [key]: Number(event.target.value) });
+                  }} />
+                </Field>
+              ))}
+            </div>
+            <Field>
+              <FieldLabel htmlFor={`door-${index}-side`}>{door.type === "hinged" ? "Hinge side" : "Retracts toward"}</FieldLabel>
+              <Select value={door.side ?? "start"} onValueChange={(side) => updateDoor(index, { side: side as DoorSpec["side"] })}>
+                <SelectTrigger id={`door-${index}-side`} className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="start">Toward wall start</SelectItem><SelectItem value="end">Toward wall end</SelectItem></SelectContent>
+              </Select>
+            </Field>
+            {door.type === "hinged" && <Field>
+              <FieldLabel htmlFor={`door-${index}-swing`}>Swing direction</FieldLabel>
+              <Select value={door.swing ?? "left"} onValueChange={(swing) => updateDoor(index, { swing: swing as DoorSpec["swing"] })}>
+                <SelectTrigger id={`door-${index}-swing`} className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="left">Left of wall direction</SelectItem><SelectItem value="right">Right of wall direction</SelectItem></SelectContent>
+              </Select>
+              <FieldDescription>Looking from the wall's start toward its end.</FieldDescription>
+            </Field>}
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={door.open ?? false} onChange={(event) => updateDoor(index, { open: event.target.checked })} />Starts open</label>
+            <Button variant="outline" size="sm" onClick={() => onUpdateWall(selectedIndex, { doors: wall.doors?.filter((_, i) => i !== index) })}>Remove door {index + 1}</Button>
+          </FieldGroup>
+        ))}
       </Field>
     </FieldGroup>
   );
@@ -762,6 +830,8 @@ function PresetForm({ name, preset, names, usage, textures, onSave, onDelete }: 
           ["lipFill", "Face color", draft.fill],
           ["windowFill", "Glass color", 0x3d7f88],
           ["windowFrame", "Window frame", undefined],
+          ["doorFill", "Door color", 0x99734f],
+          ["doorFrame", "Door frame", draft.edge],
         ] as const).map(([key, label, fallback]) => (
           <Field key={key}>
             <FieldLabel htmlFor={`preset-${key}`}>{label}</FieldLabel>

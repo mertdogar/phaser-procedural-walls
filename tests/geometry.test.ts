@@ -108,3 +108,86 @@ describe("resolveWalls", () => {
     expect(resolved.collider).toEqual({ x: 0, y: 80 - thickness / 2, w: 100, h: thickness });
   });
 });
+
+describe("door geometry", () => {
+  it.each([0, 24, 160])("cuts horizontal and vertical collision passages at height %s", (height) => {
+    for (const horizontal of [true, false]) {
+      const door = { id: "entry", type: "hinged" as const, offset: 40, width: 60 };
+      const [resolved] = resolveWalls([wall(0, 0, horizontal ? 200 : 0, horizontal ? 0 : 200, { height, doors: [door] })], presets);
+      const r = resolved.doors[0].collider;
+      expect(r).toEqual(horizontal ? { x: 40, y: height - 10, w: 60, h: 20 } : { x: -10, y: height + 40, w: 20, h: 60 });
+      expect(resolved.colliderPieces).toHaveLength(2);
+      for (const piece of resolved.colliderPieces) {
+        expect(piece.x >= r.x + r.w || piece.x + piece.w <= r.x || piece.y >= r.y + r.h || piece.y + piece.h <= r.y).toBe(true);
+      }
+      expect(resolved.colliderPieces.reduce((sum, piece) => sum + piece.w * piece.h, 0)).toBe(140 * 20);
+    }
+  });
+
+  it.each([0, 24, 80, 160])("projects vertical doorway tops and exposed faces at height %s", (height) => {
+    const [resolved] = resolveWalls([wall(0, 0, 0, 200, { height, doors: [
+      { id: "entry", type: "sliding", offset: 40, width: 60 },
+    ] })], presets);
+    expect(resolved.bodyPieces).toEqual([
+      { x: -10, y: 0, w: 20, h: 40 },
+      ...(100 + height < 200 ? [{ x: -10, y: 100 + height, w: 20, h: 100 - height }] : []),
+    ]);
+    expect(resolved.lipPieces).toEqual(height ? [
+      { x: -10, y: 40, w: 20, h: height },
+      ...(100 + height < 200 ? [{ x: -10, y: 200, w: 20, h: height }] : []),
+    ] : []);
+    expect(resolved.doors[0].collider).toEqual({ x: -10, y: 40 + height, w: 20, h: 60 });
+  });
+
+  it("keeps windows intact while cutting a full-height horizontal doorway", () => {
+    const [resolved] = resolveWalls([wall(0, 0, 300, 0, { height: 80, windows: [{ offset: 20, width: 60 }], doors: [{ id: "entry", type: "sliding", offset: 150, width: 70 }] })], presets);
+    expect(resolved.windows).toHaveLength(1);
+    expect(resolved.sills).toHaveLength(1);
+    for (const rect of [...resolved.bodyPieces, ...resolved.lipPieces]) {
+      expect(rect.x + rect.w <= 150 || rect.x >= 220).toBe(true);
+    }
+  });
+
+  it.each([true, false])("preserves door world placement and directions on reversed walls (horizontal=%s)", (horizontal) => {
+    const [resolved] = resolveWalls([wall(horizontal ? 200 : 0, horizontal ? 0 : 200, 0, 0, {
+      doors: [{ id: "reverse", type: "hinged", offset: 20, width: 40 }],
+    })], presets);
+    expect(resolved.doors[0].spec).toMatchObject({ offset: 140, side: "end", swing: "right" });
+    expect(horizontal ? resolved.doors[0].collider.x : resolved.doors[0].collider.y).toBe(horizontal ? 140 : 150);
+  });
+
+  it("accepts touching openings and doors at wall endpoints", () => {
+    expect(() => resolveWalls([wall(0, 0, 100, 0, { doors: [
+      { id: "a", type: "hinged", offset: 0, width: 40 },
+      { id: "b", type: "sliding", offset: 40, width: 60 },
+    ] })], presets)).not.toThrow();
+  });
+
+  it.each([
+    [{ id: "a", type: "hinged", offset: -1, width: 20 }, /fit/],
+    [{ id: "a", type: "hinged", offset: 90, width: 20 }, /fit/],
+    [{ id: "a", type: "hinged", offset: 10, width: 0 }, /fit/],
+    [{ id: "a", type: "hinged", offset: NaN, width: 20 }, /fit/],
+    [{ id: "a", type: "other", offset: 10, width: 20 }, /type/],
+    [{ id: "", type: "hinged", offset: 10, width: 20 }, /ID/],
+    [{ id: "a", type: "hinged", offset: 10, width: 20, open: "true" }, /boolean/],
+    [{ id: "a", type: "hinged", offset: 10, width: 20, side: "up" }, /side/],
+    [{ id: "a", type: "hinged", offset: 10, width: 20, swing: "up" }, /swing/],
+  ])("rejects invalid door data %j", (door, error) => {
+    expect(() => resolveWalls([wall(0, 0, 100, 0, { doors: [door] as WallSpec["doors"] })], presets)).toThrow(error);
+  });
+
+  it("rejects duplicate IDs across walls and overlapping openings", () => {
+    const door = { id: "a", type: "hinged" as const, offset: 20, width: 40 };
+    expect(() => resolveWalls([wall(0, 0, 100, 0, { doors: [door] }), wall(0, 100, 100, 100, { doors: [door] })], presets)).toThrow(/Duplicate/);
+    expect(() => resolveWalls([wall(0, 0, 100, 0, { doors: [door], windows: [{ offset: 50, width: 20 }] })], presets)).toThrow(/overlaps/);
+    expect(() => resolveWalls([wall(0, 0, 100, 0, { doors: [door, { ...door, id: "b" }] })], presets)).toThrow(/overlaps/);
+  });
+});
+
+it("treats negative face height as disabled for door placement too", () => {
+  const doors = [{ id: "entry", type: "hinged" as const, offset: 40, width: 60 }];
+  const [resolved] = resolveWalls([wall(0, 0, 0, 200, { height: -20, doors })], presets);
+  expect(resolved.doors[0].collider).toEqual({ x: -10, y: 40, w: 20, h: 60 });
+  expect(resolved.colliderPieces).toHaveLength(2);
+});

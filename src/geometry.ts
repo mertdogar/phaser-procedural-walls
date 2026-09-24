@@ -13,6 +13,11 @@ function normalize(w: WallSpec): WallSpec {
     ...w,
     x1: w.x2, y1: w.y2, x2: w.x1, y2: w.y1,
     windows: w.windows?.map((win) => ({ ...win, offset: length - win.offset - win.width })),
+    doors: w.doors?.map((door) => ({
+      ...door, offset: length - door.offset - door.width,
+      side: (door.side ?? "start") === "start" ? "end" : "start",
+      swing: (door.swing ?? "left") === "left" ? "right" : "left",
+    })),
   };
 }
 
@@ -66,6 +71,7 @@ export function resolveWalls(
   walls: WallSpec[],
   presets: Record<string, WallPreset>,
 ): ResolvedWall[] {
+  validateDoors(walls);
   const normalized = walls.map(normalize);
   return normalized.map((w) => {
     const preset = presets[w.preset];
@@ -99,11 +105,70 @@ export function resolveWalls(
           return { x: r.x, y: r.y + r.h - h, w: r.w, h };
         })
       : [];
-    const bodyPieces = cutRects(body, windowsInLip ? [] : windows, horizontal);
-    const lipPieces = lip ? cutRects(lip, windowsInLip ? windows : [], true) : [];
+    let bodyPieces = cutRects(body, windowsInLip ? [] : windows, horizontal);
+    let lipPieces = lip ? cutRects(lip, windowsInLip ? windows : [], true) : [];
 
     const south = body.y + body.h + (lip ? lip.h : 0);
     const collider: Rect = { ...body, y: body.y + (lip ? lip.h : 0) };
-    return { spec: w, horizontal, body, lip, bodyPieces, lipPieces, windows, sills, collider, depth: w.depth ?? south };
+    const doors = (w.doors ?? []).map((spec) => ({
+      spec,
+      collider: horizontal
+        ? { x: w.x1 + spec.offset, y: collider.y, w: spec.width, h: t }
+        : { x: collider.x, y: w.y1 + (lip?.h ?? 0) + spec.offset, w: t, h: spec.width },
+    }));
+    for (const door of doors) {
+      const hole = horizontal
+        ? { ...door.collider, y: body.y, h: t + (lip?.h ?? 0) }
+        : { ...door.collider, y: door.collider.y - (lip?.h ?? 0), h: door.collider.h + (lip?.h ?? 0) };
+      bodyPieces = subtractRect(bodyPieces, hole, horizontal);
+      if (horizontal) lipPieces = subtractRect(lipPieces, hole, horizontal);
+    }
+    if (!horizontal && doors.length && lip) {
+      const tops = doors.reduce((pieces, door) => subtractRect(pieces,
+        { ...door.collider, y: door.collider.y - lip.h, h: door.collider.h + lip.h }, false), [body]);
+      lipPieces = tops.map((rect, index) => ({
+        x: rect.x, y: rect.y + rect.h, w: rect.w,
+        h: Math.min(lip.h, (tops[index + 1]?.y ?? Infinity) - rect.y - rect.h),
+      }));
+    }
+    const colliderPieces = doors.reduce((pieces, door) => subtractRect(pieces, door.collider, horizontal), [collider]);
+    return { spec: w, horizontal, body, lip, bodyPieces, lipPieces, windows, sills, collider, colliderPieces, doors, depth: w.depth ?? south };
   });
+}
+
+function subtractRect(pieces: Rect[], hole: Rect, horizontal: boolean): Rect[] {
+  return pieces.flatMap((rect) => {
+    const x = Math.max(rect.x, hole.x);
+    const y = Math.max(rect.y, hole.y);
+    const w = Math.min(rect.x + rect.w, hole.x + hole.w) - x;
+    const h = Math.min(rect.y + rect.h, hole.y + hole.h) - y;
+    return w > 0 && h > 0 ? cutRects(rect, [{ x, y, w, h }], horizontal) : [rect];
+  });
+}
+
+export function validateDoors(walls: WallSpec[]): void {
+  const ids = new Set<string>();
+  for (const wall of walls) {
+    if (wall.doors !== undefined && !Array.isArray(wall.doors)) throw new Error("Wall doors must be an array");
+    const length = Math.abs(wall.x2 - wall.x1) + Math.abs(wall.y2 - wall.y1);
+    for (const door of wall.doors ?? []) {
+      if (!door || typeof door.id !== "string" || !door.id.trim()) throw new Error("Every door needs a non-empty ID");
+      if (ids.has(door.id)) throw new Error(`Duplicate door ID "${door.id}"`);
+      ids.add(door.id);
+      if (door.type !== "hinged" && door.type !== "sliding") throw new Error(`Door "${door.id}" has an invalid type`);
+      if (door.open !== undefined && typeof door.open !== "boolean") throw new Error(`Door "${door.id}" open must be a boolean`);
+      if (door.side !== undefined && door.side !== "start" && door.side !== "end") throw new Error(`Door "${door.id}" has an invalid side`);
+      if (door.swing !== undefined && door.swing !== "left" && door.swing !== "right") throw new Error(`Door "${door.id}" has an invalid swing`);
+      if (!Number.isFinite(length) || !Number.isFinite(door.offset) || !Number.isFinite(door.width)
+        || door.offset < 0 || door.width <= 0 || door.offset + door.width > length) {
+        throw new Error(`Door "${door.id}" must fit within its wall`);
+      }
+      for (const other of [...(wall.windows ?? []), ...(wall.doors ?? [])]) {
+        if (other === door) continue;
+        if (door.offset < other.offset + other.width && door.offset + door.width > other.offset) {
+          throw new Error(`Door "${door.id}" overlaps a window or another door`);
+        }
+      }
+    }
+  }
 }

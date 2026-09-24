@@ -32,7 +32,7 @@ Use the root for browser rendering and type-only imports for shared types.
 ```ts
 import { WallMapPlugin, WallMap } from "@mertdogar/phaser-procedural-walls";
 import type {
-  WallMapConfig, WallSpec, WallPreset, WindowSpec, Rect, ResolvedWall,
+  WallMapConfig, WallSpec, WallPreset, WindowSpec, DoorSpec, DoorType, DoorState, Rect, ResolvedWall,
 } from "@mertdogar/phaser-procedural-walls";
 ```
 
@@ -62,8 +62,18 @@ interface WallSpec {
   depth?: number;
   preset: string;
   windows?: WindowSpec[];
+  doors?: DoorSpec[];
 }
 interface WindowSpec { offset: number; width: number }
+interface DoorSpec {
+  id: string;
+  type: "hinged" | "sliding";
+  offset: number;
+  width: number;
+  open?: boolean;
+  side?: "start" | "end";
+  swing?: "left" | "right";
+}
 interface WallPreset {
   fill: number; edge: number;
   edgeWidth?: number;
@@ -71,6 +81,7 @@ interface WallPreset {
   windowFill?: number; windowFrame?: number;
   windowInset?: number; windowAlpha?: number; sillHeight?: number;
   texture?: string; lipTexture?: string;
+  doorFill?: number; doorFrame?: number;
 }
 ```
 
@@ -84,6 +95,27 @@ Window `offset` measures from the original `(x1, y1)` toward `(x2, y2)`.
 Reversing endpoints transforms the offset to `length - offset - width` during
 normalization. Windows don't remove physics bodies.
 
+## Doors
+
+Door IDs must be non-empty and map-wide unique. Doors must fit within their wall
+and cannot overlap windows or other doors. Invalid door data throws during
+geometry resolution and map construction. Offsets follow authored wall direction.
+`side` defaults to `"start"` and selects the hinge or retraction side. `swing`
+defaults to `"left"` relative to authored wall direction and applies only to hinges.
+`open` defaults to false and defines the starting state.
+
+`openDoor(id)`, `closeDoor(id)`, and `toggleDoor(id)` return the map and update the
+door directly. `getDoorState(id)` returns `"closed"`, `"opening"`, `"open"`, or
+`"closing"`. Unknown IDs throw. Both types use a 250 ms transition and reverse
+immediately from the current position; repeated target requests are no-ops.
+Hinges rotate 90 degrees; sliding panels retract within the doorway without
+pocket-space validation.
+
+Collision blocks only the doorway, stays enabled until fully open, and returns
+when closing starts. The moving panel is not a physical body. The consuming game
+owns triggers and occupancy checks. Runtime state never changes the authored
+map; `setWalls` and `redraw` reset all doors to their authored starting state.
+
 ## Presets and faces
 
 `fill` and `edge` are required. Optional values have these defaults.
@@ -93,6 +125,8 @@ normalization. Windows don't remove physics bodies.
 | `edgeWidth` | `2` | Outline width |
 | `lipHeight` | `0` | Face height below the body |
 | `lipFill` | `fill` | Face color |
+| `doorFill` | `0x99734f` | Door panel color |
+| `doorFrame` | `edge` | Door frame and panel outline |
 | `windowFill` | `0x3d7f88` | Glass color |
 | `windowAlpha` | `0.5` | Glass opacity |
 | `windowFrame` | absent | Optional 1px frame color |
@@ -123,8 +157,10 @@ the body extends by half the maximum thickness of an intersecting wall to
 fill corners and T-junctions.
 
 Each result has `spec`, `horizontal`, `body`, `lip`, `bodyPieces`, `lipPieces`,
-`windows`, `sills`, `collider`, and `depth`. Rectangles use
-`{ x, y, w, h }` with top-left origin. `lip` can be null.
+`windows`, `sills`, `collider`, `colliderPieces`, `doors`, and `depth`. Rectangles use
+`{ x, y, w, h }` with top-left origin. `lip` can be null. `collider` is the
+uncut footprint; use `colliderPieces` for permanent collision and each resolved
+door's `{ spec, collider }` to add the blocker unless fully open.
 
 The south edge is `body.y + body.h + (lip?.h ?? 0)`:
 
@@ -140,12 +176,12 @@ rectangle. It isn't a general polygon boolean operation.
 
 ## WallMap lifecycle
 
-`this.add.wallMap(config)` returns a `WallMap`, which owns one container per
-wall rather than being a game object itself.
+`this.add.wallMap(config)` returns a `WallMap`, which owns wall and door containers
+rather than being a game object itself.
 
 | Member | Behavior |
 | --- | --- |
-| `containers` | Containers in input order, each with its own depth |
+| `containers` | Wall containers in input order, each followed by its door containers |
 | `bodies` | Arcade static group, or null without `collide: true` |
 | `setWalls(walls)` | Replaces wall list and rebuilds; returns this |
 | `redraw()` | Rebuilds current config; returns this |

@@ -107,7 +107,7 @@ sections. Each section scrolls independently. Focus a divider and use the arrow
 keys for keyboard resizing.
 
 1. Click a layer to select its wall on the canvas and load its inspector.
-2. Use **Duplicate wall** to copy it, including its windows. The copy is selected
+2. Use **Duplicate wall** to copy it, including its windows and doors, with new IDs for copied doors. The copy is selected
    and offset by 32 px on both axes.
 3. Use **Bring wall forward** or **Send wall backward** to move it one position.
    The list runs from front to back. Reordering writes explicit drawing depths
@@ -140,8 +140,22 @@ Set **Width (px)** beside **Offset (px)** for each window in the inspector.
 Changes appear immediately. Width is at least 1 pixel and can't extend past
 the wall's end from the current offset.
 
-Windows are visual openings and do not create walkable gaps. For a doorway,
-leave space between two wall segments.
+Windows are visual openings and do not create walkable gaps. Add a door for a
+passage that can open and close.
+
+## Add and edit doors
+
+Select a wall and click **Add door** in the inspector. The editor inserts a
+64 px hinged door in the first available gap. If no gap fits, make room by editing
+existing openings. Set the ID, type, offset, width, hinge or retraction side,
+swing direction, and **Starts open** in the inspector. Drag doors along the wall
+using the same grid snapping as windows. Use **Remove door** to delete one.
+
+Door IDs must be unique across the map. Invalid placements show an error and
+leave the map unchanged; dragging stops at the last valid placement. Door edits
+use the existing undo/redo history, and JSON import/export retains all settings.
+Door fill and frame colors live in **Presets**. Moving or deleting a wall also
+moves or deletes its doors.
 
 ## Manage shared presets
 
@@ -175,7 +189,9 @@ Images tile at their original pixel size. Use a small seamless texture for repea
 
 ## Test movement and collisions
 
-Click **Preview** next to Export JSON. The editing tools hide and a character appears. Use the arrow keys to move; diagonal movement is normalized and walls block the character. Click the canvas if it needs keyboard focus. Click **Exit preview** to resume editing.
+Click **Preview** next to Export JSON. The editing tools hide and a character appears. Use the arrow keys to move; diagonal movement is normalized and walls block the character. Click the canvas if it needs keyboard focus. Press **E** near a door to open or close it. Step out of the doorway before
+closing; the preview checks the player's collision body. Click **Exit preview** to
+resume editing. Preview interactions do not change **Starts open**.
 
 ![Playable preview with a character inside the map](images/wallcraft-preview.png)
 
