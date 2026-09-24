@@ -101,7 +101,7 @@ export class WallMap {
     const resolved = resolveWalls(walls, presets);
     if (collide) this.bodies = this.scene.physics.add.staticGroup();
     for (const wall of resolved) {
-      this.containers.push(this.drawWall(wall, presets[wall.spec.preset]));
+      this.containers.push(...this.drawWall(wall, presets[wall.spec.preset]));
       if (this.bodies) for (const rect of wall.colliderPieces) this.addBody(rect);
       for (const door of wall.doors) {
         const container = this.scene.add.container(0, 0);
@@ -120,50 +120,49 @@ export class WallMap {
     }
   }
 
-  private drawWall(wall: ResolvedWall, preset: WallPreset): Phaser.GameObjects.Container {
-    const { body, lip, bodyPieces, lipPieces, windows, sills } = wall;
-    const container = this.scene.add.container(0, 0);
-    const g = this.scene.add.graphics();
-    const top = this.scene.add.graphics();
-    const edgeWidth = preset.edgeWidth ?? 2;
+  private drawWall(wall: ResolvedWall, preset: WallPreset): Phaser.GameObjects.Container[] {
+    return wall.surfaces.map(({ rect, kind, depth }) => {
+      const container = this.scene.add.container(0, 0);
+      const g = this.scene.add.graphics();
+      if (kind === "window") {
+        g.fillStyle(preset.windowFill ?? 0x3d7f88, preset.windowAlpha ?? 0.5);
+        g.fillRect(rect.x, rect.y, rect.w, rect.h);
+      } else {
+        this.fillRect(container, g, rect, kind === "lip" ? preset.lipFill ?? preset.fill : preset.fill,
+          kind === "lip" ? preset.lipTexture : preset.texture);
+      }
+      const edge = kind === "window" ? preset.windowFrame : preset.edge;
+      if (edge !== undefined) {
+        g.lineStyle(kind === "window" ? 1 : preset.edgeWidth ?? 2, edge);
+        const neighbors = wall.surfaces.filter((s) => s.kind === kind && s.depth === depth && s.rect !== rect).map((s) => s.rect);
+        this.strokeBoundary(g, rect, neighbors);
+      }
+      container.add(g);
+      container.setDepth(depth);
+      return container;
+    });
+  }
 
-    for (const r of bodyPieces) this.fillRect(container, g, r, preset.fill, preset.texture);
-    for (const r of lipPieces) this.fillRect(container, g, r, preset.lipFill ?? preset.fill, preset.lipTexture);
-
-    const windowFill = preset.windowFill ?? 0x3d7f88;
-    for (const r of windows) {
-      g.fillStyle(windowFill, preset.windowAlpha ?? 0.5);
-      g.fillRect(r.x, r.y, r.w, r.h);
-    }
-    container.add(g);
-
-    for (const r of sills) this.fillRect(container, top, r, preset.fill, preset.texture);
-    for (const r of sills) top.lineStyle(1, preset.edge).lineBetween(r.x, r.y, r.x + r.w, r.y);
-    if (preset.windowFrame !== undefined) {
-      for (const r of windows) top.lineStyle(1, preset.windowFrame).strokeRect(r.x, r.y, r.w, r.h);
-    }
-
-    top.lineStyle(edgeWidth, preset.edge);
-    if (!wall.doors.length) {
-      top.strokeRect(body.x, body.y, body.w, body.h);
-      if (lip) top.strokeRect(lip.x, lip.y, lip.w, lip.h);
-    } else {
-      for (const rect of [...bodyPieces, ...lipPieces]) top.strokeRect(rect.x, rect.y, rect.w, rect.h);
-      top.lineStyle(edgeWidth, preset.doorFrame ?? preset.edge);
-      for (const { collider: r } of wall.doors) {
-        if (wall.horizontal) {
-          top.lineBetween(r.x, body.y, r.x, r.y + r.h);
-          top.lineBetween(r.x + r.w, body.y, r.x + r.w, r.y + r.h);
-        } else {
-          top.lineBetween(r.x, r.y, r.x + r.w, r.y);
-          top.lineBetween(r.x, r.y + r.h, r.x + r.w, r.y + r.h);
+  private strokeBoundary(g: Phaser.GameObjects.Graphics, r: Rect, neighbors: Rect[]): void {
+    for (const horizontal of [true, false]) {
+      for (const end of [false, true]) {
+        const fixed = horizontal ? r.y + (end ? r.h : 0) : r.x + (end ? r.w : 0);
+        const start = horizontal ? r.x : r.y;
+        const finish = start + (horizontal ? r.w : r.h);
+        const shared = neighbors.filter((n) => (horizontal ? n.y + (end ? 0 : n.h) : n.x + (end ? 0 : n.w)) === fixed)
+          .map((n) => horizontal ? [n.x, n.x + n.w] : [n.y, n.y + n.h]).sort((a, b) => a[0] - b[0]);
+        let cursor = start;
+        const line = (a: number, b: number) => {
+          if (b > a) g.lineBetween(horizontal ? a : fixed, horizontal ? fixed : a, horizontal ? b : fixed, horizontal ? fixed : b);
+        };
+        for (const [a, b] of shared) {
+          if (b <= cursor || a >= finish) continue;
+          line(cursor, Math.min(a, finish));
+          cursor = Math.min(finish, Math.max(cursor, b));
         }
+        line(cursor, finish);
       }
     }
-
-    container.add(top);
-    container.setDepth(wall.depth);
-    return container;
   }
 
   private fillRect(
@@ -185,13 +184,12 @@ export class WallMap {
   private drawDoor(runtime: RuntimeDoor): void {
     const { door, wall, preset, progress, graphics: g, container } = runtime;
     const { spec, collider: r } = door;
-    if (!wall.horizontal && wall.lip && spec.type === "hinged") {
-      this.drawVerticalHingedDoor(runtime);
-      return;
-    }
     const end = spec.side === "end";
     const horizontal = wall.horizontal;
     let x = horizontal ? r.x : r.x + r.w / 2;
+    if (!horizontal && spec.height < (wall.lip?.h ?? 0)) {
+      x += (spec.type === "hinged" && spec.swing !== "right" ? 1 : -1) * r.w / 2;
+    }
     let y = horizontal ? r.y + r.h / 2 : r.y;
     let length = spec.width;
     let angle = horizontal ? 0 : Math.PI / 2;
@@ -212,7 +210,7 @@ export class WallMap {
     const half = Math.min(wall.spec.thickness, 8) / 2;
     const nx = -Math.sin(angle) * half;
     const ny = Math.cos(angle) * half;
-    const height = wall.lip?.h ?? 0;
+    const height = spec.height;
     const points = [
       { x: x + nx, y: y + ny - height },
       { x: x + dx + nx, y: y + dy + ny - height },
@@ -229,45 +227,9 @@ export class WallMap {
       }
     }
     g.fillPoints(points, true).strokePoints(points, true);
-    const depth = wall.spec.depth ?? Math.max(y, y + dy) + half;
-    container.setDepth(horizontal ? depth : Math.min(depth, wall.depth - 0.000001));
-  }
-
-  private drawVerticalHingedDoor(runtime: RuntimeDoor): void {
-    const { door: { spec, collider: r }, wall, preset, progress, graphics: g, container } = runtime;
-    const faceHeight = Math.min(wall.lip!.h, spec.width / 2);
-    const angle = progress * Math.PI / 2;
-    const edgeWidth = Math.min(r.w * 0.5, spec.width * 0.05);
-    const faceWidth = edgeWidth * Math.sin(angle);
-    const tailHeight = (spec.width - faceHeight) * Math.cos(angle);
-    const height = faceHeight + tailHeight;
-    const right = spec.swing === "right";
-    const stripX = r.x + (r.w - edgeWidth) / 2;
-    const faceX = right ? stripX + edgeWidth : stripX - faceWidth;
-    const y = spec.side === "end" ? r.y + r.h - height : r.y;
-    const faceY = spec.side === "end" ? y + tailHeight : y;
-    const color = preset.doorFill ?? 0x99734f;
-    const edge = preset.doorFrame ?? preset.edge;
-    const bevel = Math.min(2, edgeWidth / 4);
-    g.clear();
-    g.fillStyle(color).fillRect(stripX, y, edgeWidth, height);
-    g.fillStyle(edge).fillRect(stripX, y, bevel, height);
-    g.fillStyle(preset.fill, 0.55).fillRect(stripX + edgeWidth - bevel, y, bevel, height);
-    g.lineStyle(preset.edgeWidth ?? 2, edge).strokeRect(stripX, y, edgeWidth, height);
-    g.lineBetween(stripX, spec.side === "end" ? faceY : y + faceHeight, stripX + edgeWidth, spec.side === "end" ? faceY : y + faceHeight);
-    if (faceWidth > 0.01) {
-      g.fillStyle(color).fillRect(faceX, faceY, faceWidth, faceHeight);
-      g.fillStyle(preset.fill, 0.6).fillRect(faceX, faceY + 1, faceWidth, bevel);
-      g.fillStyle(edge, 0.25).fillRect(faceX, faceY + faceHeight - bevel, faceWidth, bevel);
-      g.lineStyle(preset.edgeWidth ?? 2, edge).strokeRect(faceX, faceY, faceWidth, faceHeight);
-      const hardwareHeight = Math.min(6, faceHeight / 8);
-      for (const offset of [0.2, 0.8]) {
-        const hardwareY = faceY + faceHeight * offset - hardwareHeight / 2;
-        g.fillStyle(0x68747d, Math.sin(angle)).fillRect(faceX, hardwareY, faceWidth, hardwareHeight);
-        g.fillStyle(0xcbd2d7, Math.sin(angle)).fillRect(faceX + faceWidth / 4, hardwareY + 1, faceWidth / 2, hardwareHeight - 2);
-      }
-    }
-    container.setDepth(wall.depth + 0.000001);
+    const depth = Math.max(y, y + dy) + half
+      + (wall.spec.depth === undefined ? 0 : wall.depth - wall.collider.y - wall.collider.h);
+    container.setDepth(depth);
   }
 
   private addBody(c: Rect): Phaser.Physics.Arcade.StaticBody {

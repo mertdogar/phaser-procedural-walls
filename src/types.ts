@@ -8,7 +8,7 @@ export interface WallPreset {
   windowFrame?: number;
   windowInset?: number;
   windowAlpha?: number;
-  sillHeight?: number;
+  sillThickness?: number;
   texture?: string;
   lipTexture?: string;
   doorFill?: number;
@@ -23,6 +23,7 @@ export interface DoorSpec {
   type: DoorType;
   offset: number;
   width: number;
+  height: number;
   open?: boolean;
   side?: "start" | "end";
   swing?: "left" | "right";
@@ -36,6 +37,8 @@ export interface ResolvedDoor {
 export interface WindowSpec {
   offset: number;
   width: number;
+  height: number;
+  sillHeight: number;
 }
 
 export interface WallSpec {
@@ -64,7 +67,15 @@ export interface Rect {
   h: number;
 }
 
+export interface WallSurface {
+  rect: Rect;
+  kind: "body" | "lip" | "window" | "sill";
+  floorY: number;
+  depth: number;
+}
+
 export interface ResolvedWall {
+  surfaces: WallSurface[];
   spec: WallSpec;
   horizontal: boolean;
   body: Rect;

@@ -42,6 +42,7 @@ export class EditorScene extends Phaser.Scene {
     this.drawGrid();
     this.editor = new WallEditor(this, {
       config: this.configData, selectedIndex: this.selectedIndex, tool: this.tool, enabled: !this.preview,
+      onError: this.onTextureError,
       onAddWall: (wall) => this.callbacks.onAddWall(wall),
       onSelectWall: (index) => this.callbacks.onSelectWall(index),
       onUpdateWall: (index, patch) => this.callbacks.onUpdateWall(index, patch),
@@ -159,13 +160,15 @@ export class EditorScene extends Phaser.Scene {
     let behind = Infinity;
     let inFront = -Infinity;
     for (const wall of this.previewWalls) {
-      const bottom = wall.collider.y + wall.collider.h;
-      if (player.x + player.width / 2 <= wall.body.x
-        || player.x - player.width / 2 >= wall.body.x + wall.body.w
-        || player.y <= wall.body.y
-        || player.y - player.height >= bottom) continue;
-      if (player.y < bottom) behind = Math.min(behind, wall.depth);
-      else inFront = Math.max(inFront, wall.depth);
+      for (const surface of wall.surfaces) {
+        const r = surface.rect;
+        if (player.x + player.width / 2 <= r.x || player.x - player.width / 2 >= r.x + r.w
+          || player.y <= r.y || player.y - player.height >= r.y + r.h) continue;
+        const floorY = surface.floorY;
+        if (wall.spec.depth === undefined) continue;
+        if (player.y < floorY) behind = Math.min(behind, surface.depth);
+        else inFront = Math.max(inFront, surface.depth);
+      }
     }
     if (inFront < behind && Number.isFinite(inFront) && Number.isFinite(behind)) {
       return (inFront + behind) / 2;

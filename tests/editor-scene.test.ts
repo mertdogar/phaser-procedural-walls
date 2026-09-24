@@ -43,8 +43,8 @@ function makeEditor(options: Partial<WallEditorOptions> = {}) {
   const events = { once: vi.fn(), off: vi.fn() };
   const camera = { zoom: 1 };
   const scene = { input, events, cameras: { main: camera }, add: { graphics: () => graphics } };
-  const callbacks = { onAddWall: vi.fn(), onSelectWall: vi.fn(), onUpdateWall: vi.fn() };
-  const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [] };
+  const callbacks = { onError: vi.fn(), onAddWall: vi.fn(), onSelectWall: vi.fn(), onUpdateWall: vi.fn() };
+  const config = { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [] };
   const editor = new WallEditor(scene as unknown as Phaser.Scene, {
     config, selectedIndex: null, tool: "wall", ...callbacks, ...options,
   });
@@ -63,8 +63,8 @@ describe("editor world coordinates", () => {
     [10, 20, 10, 276, 10, 120],
     [10, 276, 10, 20, 10, 120],
   ])("moves the whole segment from (%s, %s) to (%s, %s) without changing its data during preview", (x1, y1, x2, y2, x, y) => {
-    const wall = { x1, y1, x2, y2, thickness: 20, height: 48, preset: "p", windows: [{ offset: 192, width: 32 }] };
-    const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] };
+    const wall = { x1, y1, x2, y2, thickness: 20, height: 48, preset: "p", windows: [{ offset: 192, width: 32, height: 24, sillHeight: 8 }] };
+    const config = { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [wall] };
     const { emit, editor, onUpdateWall } = makeEditor({ config, tool: "select", selectedIndex: 0, gridSize: 16 });
     emit("pointerdown", pointer(x, y));
     expect(editor.dragging).toBe(true);
@@ -73,12 +73,12 @@ describe("editor world coordinates", () => {
     expect(onUpdateWall).not.toHaveBeenCalled();
     emit("pointerupoutside", pointer(x + 35, y - 49));
     expect(onUpdateWall).toHaveBeenCalledExactlyOnceWith(0, { x1: x1 + 32, y1: y1 - 48, x2: x2 + 32, y2: y2 - 48 });
-    expect(wall.windows).toEqual([{ offset: 192, width: 32 }]);
+    expect(wall.windows).toEqual([{ offset: 192, width: 32, height: 24, sillHeight: 8 }]);
     expect(editor.dragging).toBe(false);
   });
 
   it.each(["cancel", "disabled", "replacement", "destroy"])("cleans up a wall move on %s without emitting an edit", (action) => {
-    const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 16, preset: "p" }] };
+    const config = { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 16, preset: "p" }] };
     const { emit, editor, onUpdateWall } = makeEditor({ config, tool: "select", selectedIndex: 0 });
     const destroyed = vi.spyOn(WallMap.prototype, "destroy");
     emit("pointerdown", pointer(100, 0));
@@ -94,7 +94,7 @@ describe("editor world coordinates", () => {
   });
 
   it("does not emit an edit for a centerline click or a drag back to the origin", () => {
-    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 16, preset: "p" }] }, tool: "select", selectedIndex: 0 });
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 16, preset: "p" }] }, tool: "select", selectedIndex: 0 });
     emit("pointerdown", pointer(100, 0));
     emit("pointerup", pointer(102, 1));
     emit("pointerdown", pointer(100, 0));
@@ -104,7 +104,7 @@ describe("editor world coordinates", () => {
   });
 
   it("prioritizes endpoints over the centerline and uses a zoom-scaled centerline hit area", () => {
-    const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 40, preset: "p" }] };
+    const config = { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 40, preset: "p" }] };
     const { emit, editor, camera, onUpdateWall } = makeEditor({ config, tool: "select", selectedIndex: 0 });
     emit("pointerdown", pointer(250, 0));
     emit("pointerup", pointer(288, 0));
@@ -118,7 +118,7 @@ describe("editor world coordinates", () => {
   });
 
   it("uses custom grid, camera, defaults, and overlay depth without changing host data", () => {
-    const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [] };
+    const config = { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [] };
     const camera = { zoom: 2 } as Phaser.Cameras.Scene2D.Camera;
     const { emit, onAddWall, graphics } = makeEditor({ config, camera, gridSize: 16, overlayDepth: 500, newWall: { preset: "p", thickness: 24, height: 80 } });
     const down = pointer(-17, 18);
@@ -136,7 +136,7 @@ describe("editor world coordinates", () => {
     const { editor, emit, onAddWall } = makeEditor();
     emit("pointerdown", pointer(0, 0));
     expect(editor.dragging).toBe(true);
-    const state = { config: { presets: { p: { fill: 0, edge: 0 } }, walls: [] }, selectedIndex: null, tool: "wall" as const };
+    const state = { config: { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [] }, selectedIndex: null, tool: "wall" as const };
     editor.setState({ ...state, enabled: false });
     emit("pointerup", pointer(96, 0));
     emit("pointerdown", pointer(0, 0));
@@ -151,7 +151,7 @@ describe("editor world coordinates", () => {
 
   it("cancels instead of applying a stale index after the host replaces the map", () => {
     const wall = { x1: 0, y1: 0, x2: 128, y2: 0, thickness: 16, preset: "p" };
-    const { editor, emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
+    const { editor, emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
     emit("pointerdown", pointer(128, 0));
     editor.setState({ config: { presets: {}, walls: [] }, selectedIndex: null, tool: "select" });
     emit("pointerup", pointer(192, 0));
@@ -160,22 +160,24 @@ describe("editor world coordinates", () => {
   });
 
   it("selects a wall and clears selection on empty space", () => {
-    const { emit, onSelectWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [{ x1: 0, y1: 0, x2: 128, y2: 0, thickness: 16, preset: "p" }] }, tool: "select" });
+    const { emit, onSelectWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [{ x1: 0, y1: 0, x2: 128, y2: 0, thickness: 16, preset: "p" }] }, tool: "select" });
     emit("pointerdown", pointer(64, 4));
+    expect(onSelectWall).toHaveBeenLastCalledWith(0);
+    emit("pointerdown", pointer(64, -35));
     expect(onSelectWall).toHaveBeenLastCalledWith(0);
     emit("pointerdown", pointer(300, 300));
     expect(onSelectWall).toHaveBeenLastCalledWith(null);
   });
 
   it("drags a window on a reversed wall without mutating its config", () => {
-    const wall = { x1: 256, y1: 0, x2: 0, y2: 0, thickness: 16, preset: "p", windows: [{ offset: 64, width: 32 }] };
-    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, tool: "select", selectedIndex: 0 });
-    emit("pointerdown", pointer(176, 0));
-    emit("pointermove", pointer(112, 0));
+    const wall = { x1: 256, y1: 0, x2: 0, y2: 0, thickness: 16, preset: "p", windows: [{ offset: 64, width: 32, height: 24, sillHeight: 8 }] };
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [wall] }, tool: "select", selectedIndex: 0 });
+    emit("pointerdown", pointer(176, -20));
+    emit("pointermove", pointer(112, -20));
     expect(onUpdateWall).not.toHaveBeenCalled();
-    emit("pointerup", pointer(112, 0));
-    expect(onUpdateWall).toHaveBeenCalledExactlyOnceWith(0, { windows: [{ offset: 128, width: 32 }] });
-    expect(wall.windows).toEqual([{ offset: 64, width: 32 }]);
+    emit("pointerup", pointer(112, -20));
+    expect(onUpdateWall).toHaveBeenCalledExactlyOnceWith(0, { windows: [{ offset: 128, width: 32, height: 24, sillHeight: 8 }] });
+    expect(wall.windows).toEqual([{ offset: 64, width: 32, height: 24, sillHeight: 8 }]);
   });
 
   it("does not draw on a non-primary press or a click shorter than one grid step", () => {
@@ -226,11 +228,11 @@ describe("editor world coordinates", () => {
   });
 
   it.each([
-    [680, 618.9588499999999, false], [735, 618.9588499999999, true],
-    [680, 5000, false], [735, 5000, true],
-    [680, -300, false], [735, -300, true],
+    [580, 618.9588499999999, false], [635, 618.9588499999999, true],
+    [580, 5000, false], [635, 5000, true],
+    [580, -300, false], [635, -300, true],
   ])("sorts preview feet at %s against wall depth %s", (feet, depth, inFront) => {
-    const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [
+    const config = { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [
       { x1: 100, y1: 620, x2: 500, y2: 620, thickness: 20, height: 100, preset: "p", depth },
     ] };
     const scene = new EditorScene(config, vi.fn());
@@ -257,7 +259,7 @@ describe("editor world coordinates", () => {
 
   it("does not clamp a dragged endpoint on a large map", () => {
     const wall: WallSpec = { x1: 1600, y1: 1280, x2: 2112, y2: 1280, thickness: 20, preset: "p" };
-    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, tool: "select", selectedIndex: 0 });
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [wall] }, tool: "select", selectedIndex: 0 });
     emit("pointerdown", pointer(2112, 1280));
     emit("pointerup", pointer(2240, 1290));
     expect(onUpdateWall).toHaveBeenCalledWith(0, { x1: 1600, y1: 1280, x2: 2240, y2: 1280 });
@@ -265,7 +267,7 @@ describe("editor world coordinates", () => {
 
   it("includes negative coordinates, wall thickness, and faces in map bounds", () => {
     const config = {
-      presets: { p: { fill: 0, edge: 0 } },
+      presets: { p: { fill: 0, edge: 0, lipHeight: 48 } },
       walls: [{ x1: -320, y1: 1504, x2: 2112, y2: 1504, thickness: 32, height: 160, preset: "p" }],
     };
     const bounds = getMapBounds(config);
@@ -276,7 +278,7 @@ describe("editor world coordinates", () => {
 
   it("fits a large map into the available camera area", () => {
     const config = {
-      presets: { p: { fill: 0, edge: 0 } },
+      presets: { p: { fill: 0, edge: 0, lipHeight: 48 } },
       walls: [{ x1: 320, y1: 1504, x2: 2112, y2: 1504, thickness: 32, preset: "p" }],
     };
     const scene = new EditorScene(config, vi.fn());
@@ -295,7 +297,7 @@ describe("editor world coordinates", () => {
 
   it("pans in world units without adding a wall", () => {
     const onAddWall = vi.fn();
-    const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [] };
+    const config = { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [] };
     const scene = new EditorScene(config, vi.fn());
     Object.assign(scene.cameras.main, { zoom: 0.5, scrollX: 1000, scrollY: 800 });
     Object.assign(scene, { input: { setDefaultCursor: vi.fn() }, editor: makeEditor().editor });
@@ -350,7 +352,7 @@ describe("editor world coordinates", () => {
 
   it("expands the actual scene physics bounds when loading a large map", async () => {
     const config = {
-      presets: { p: { fill: 0, edge: 0 } },
+      presets: { p: { fill: 0, edge: 0, lipHeight: 48 } },
       walls: [{ x1: 320, y1: 1504, x2: 2112, y2: 1504, thickness: 32, height: 160, preset: "p" }],
     };
     const scene = new EditorScene(config, vi.fn());
@@ -367,8 +369,8 @@ describe("editor world coordinates", () => {
 
 describe("door editing", () => {
   it.each([false, true])("drags doors using authored offsets on a reversed=%s wall", (reversed) => {
-    const wall: WallSpec = { x1: reversed ? 320 : 0, y1: 0, x2: reversed ? 0 : 320, y2: 0, thickness: 16, preset: "p", doors: [{ id: "entry", type: "hinged", offset: 64, width: 64 }] };
-    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
+    const wall: WallSpec = { x1: reversed ? 320 : 0, y1: 0, x2: reversed ? 0 : 320, y2: 0, thickness: 16, preset: "p", doors: [{ id: "entry", type: "hinged", height: 24, offset: 64, width: 64 }] };
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
     emit("pointerdown", pointer(reversed ? 224 : 96, 0));
     emit("pointerup", pointer(reversed ? 192 : 128, 0));
     expect(onUpdateWall).toHaveBeenCalledExactlyOnceWith(0, { doors: [{ ...wall.doors![0], offset: 96 }] });
@@ -376,29 +378,30 @@ describe("door editing", () => {
   });
 
   it("prevents dragging a door over a window and shrinking a wall through a door", () => {
-    const wall: WallSpec = { x1: 0, y1: 0, x2: 320, y2: 0, thickness: 16, preset: "p", windows: [{ offset: 192, width: 64 }], doors: [{ id: "entry", type: "sliding", offset: 64, width: 64 }] };
-    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
+    const wall: WallSpec = { x1: 0, y1: 0, x2: 320, y2: 0, thickness: 16, preset: "p", windows: [{ offset: 192, width: 64, height: 24, sillHeight: 8 }], doors: [{ id: "entry", type: "sliding", height: 24, offset: 64, width: 64 }] };
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
     emit("pointerdown", pointer(96, 0));
     emit("pointerup", pointer(224, 0));
-    expect(onUpdateWall).toHaveBeenLastCalledWith(0, { doors: wall.doors });
+    expect(onUpdateWall).not.toHaveBeenCalled();
     emit("pointerdown", pointer(320, 0));
     emit("pointerup", pointer(96, 0));
-    expect(onUpdateWall).toHaveBeenLastCalledWith(0, { x1: 0, y1: 0, x2: 320, y2: 0 });
+    expect(onUpdateWall).not.toHaveBeenCalled();
   });
 
   it("prevents a window drag from overlapping a door", () => {
-    const wall: WallSpec = { x1: 0, y1: 0, x2: 320, y2: 0, thickness: 16, preset: "p", windows: [{ offset: 192, width: 64 }], doors: [{ id: "entry", type: "sliding", offset: 64, width: 64 }] };
-    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
-    emit("pointerdown", pointer(224, 0));
-    emit("pointerup", pointer(96, 0));
-    expect(onUpdateWall).toHaveBeenLastCalledWith(0, { windows: wall.windows });
+    const wall: WallSpec = { x1: 0, y1: 0, x2: 320, y2: 0, thickness: 16, preset: "p", windows: [{ offset: 192, width: 64, height: 24, sillHeight: 8 }], doors: [{ id: "entry", type: "sliding", height: 24, offset: 64, width: 64 }] };
+    const { emit, onUpdateWall, onError } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
+    emit("pointerdown", pointer(224, -20));
+    emit("pointerup", pointer(96, -20));
+    expect(onUpdateWall).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenLastCalledWith(expect.stringMatching(/overlaps/));
   });
 
   it("accounts for projected face height when dragging a vertical door", () => {
-    const wall: WallSpec = { x1: 0, y1: 0, x2: 0, y2: 320, thickness: 16, height: 80, preset: "p", doors: [{ id: "entry", type: "hinged", offset: 64, width: 64 }] };
-    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
-    emit("pointerdown", pointer(0, 176));
-    emit("pointerup", pointer(0, 208));
+    const wall: WallSpec = { x1: 0, y1: 0, x2: 0, y2: 320, thickness: 16, height: 80, preset: "p", doors: [{ id: "entry", type: "hinged", height: 24, offset: 64, width: 64 }] };
+    const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
+    emit("pointerdown", pointer(0, 84));
+    emit("pointerup", pointer(0, 116));
     expect(onUpdateWall).toHaveBeenLastCalledWith(0, { doors: [{ ...wall.doors![0], offset: 96 }] });
   });
 });
@@ -414,7 +417,7 @@ it("spawns near the map center rather than outside the sample's closed perimeter
 });
 
 it("preview refuses closure on an occupant and permits it after they move away", () => {
-  const config = { presets: { p: { fill: 0, edge: 0 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 16, preset: "p", doors: [{ id: "entry", type: "hinged" as const, offset: 96, width: 64 }] }] };
+  const config = { presets: { p: { fill: 0, edge: 0, lipHeight: 48 } }, walls: [{ x1: 0, y1: 0, x2: 256, y2: 0, thickness: 16, preset: "p", doors: [{ id: "entry", type: "hinged" as const, height: 24, offset: 96, width: 64 }] }] };
   const error = vi.fn();
   const scene = new EditorScene(config, error);
   const canvas = {};
@@ -432,4 +435,15 @@ it("preview refuses closure on an occupant and permits it after they move away",
   scene["interactDoor"]({ repeat: true } as KeyboardEvent);
   expect(toggleDoor).toHaveBeenCalledTimes(1);
   vi.unstubAllGlobals();
+});
+
+
+it.each([false, true])("drags elevated windows on vertical walls (reversed=%s)", (reversed) => {
+  const win = { offset: 128, width: 64, height: 40, sillHeight: 60 };
+  const wall: WallSpec = { x1: 0, y1: reversed ? 320 : 0, x2: 0, y2: reversed ? 0 : 320,
+    thickness: 16, height: 160, preset: "p", windows: [win] };
+  const { emit, onUpdateWall } = makeEditor({ config: { presets: { p: { fill: 0, edge: 0 } }, walls: [wall] }, selectedIndex: 0, tool: "select" });
+  emit("pointerdown", pointer(0, 80));
+  emit("pointerup", pointer(0, reversed ? 48 : 112));
+  expect(onUpdateWall).toHaveBeenLastCalledWith(0, { windows: [{ ...win, offset: 160 }] });
 });

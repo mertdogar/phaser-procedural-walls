@@ -163,16 +163,17 @@ Open **Presets** in the top bar, then select a style.
 
 - **New** creates a preset with the default interior style.
 - **Duplicate** copies the selected saved preset.
-- Edit the name, colors, face height, outline width, glass opacity, inset, or sill height, then click **Save preset**.
+- Edit the name, colors, face height, outline width, glass opacity, inset, or sill thickness, then click **Save preset**.
 - Renaming keeps all linked walls assigned to the renamed preset.
 - Delete is available only when no walls use the preset and at least one other preset remains.
 
 Edits apply on save. Switching presets or closing the manager discards unsaved form edits. Individual wall height overrides remain in effect after changing a preset's face height. To inherit the preset again, remove that wall's `height` field in JSON and reimport.
 
-Leave **Sill height** blank to match each wall's thickness. An explicit value
+Leave **Sill thickness** blank to match each wall's thickness. An explicit value
 overrides that behavior, and zero disables sills. The sill is clipped to the
-opening height, so it can cover a short opening completely. Older maps with an
-explicit `sillHeight` retain that value until you clear it and save the preset.
+opening height, so it can cover a short opening completely. In older maps, rename
+the preset’s `sillHeight` to `sillThickness` before importing. Each window’s
+`sillHeight` now specifies its distance above the floor.
 
 ![Preset manager with uploaded texture previews](images/wallcraft-presets.png)
 
@@ -202,9 +203,10 @@ footprints, including walls with custom drawing orders. This is editor-only
 behavior. Your game must implement its own character sorting when using explicit
 wall depths; JSON export contains wall data, not the preview's player logic.
 
-Collisions use the wall body's bottom footprint, shifted south by its effective
-face height, rather than the full raised face. Use matching face heights for
-segments around an aligned doorway. See [collision geometry](how-it-works.md#collision)
+Endpoints and collision use the fixed floor footprint. Height grows upward;
+connected walls can have different heights without moving their junctions.
+Set each door’s height and each window’s height and **Above floor** distance
+in the inspector. Invalid changes preserve the last valid map and show an error. See [collision geometry](how-it-works.md#collision)
 for the exact model. Preview hides the layers and inspector to use the full canvas.
 
 ## Save and load maps

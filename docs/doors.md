@@ -6,7 +6,7 @@ This document records the implemented door design. See the
 - Doors are functional: closed doors block movement, and open doors permit
   passage.
 - Each door belongs to a wall segment and is positioned by offset and width,
-  like a window. Moving the wall moves its doors; deleting it removes them.
+  with a required height above the floor. Moving the wall moves its doors; deleting it removes them.
 - The consuming game decides when a door opens or closes. The library exposes
   those operations and updates the door's appearance and collision together.
 - Wallcraft's playable preview provides a simple door interaction for testing.
@@ -33,8 +33,9 @@ This document records the implemented door design. See the
 - Hinged doors open through a fixed 90-degree angle. The hinge can be at either
   end of the doorway, and the swing can be toward either side of the wall.
   Custom opening angles and double doors are outside the first version.
-- Doors must fit within their wall segment and must not overlap windows or
-  other doors on that segment. Invalid placements produce clear errors rather
+- Doors must fit within their wall length and height. Openings must not
+  intersect in both along-wall position and elevation. Windows above doors
+  are allowed. Invalid placements produce clear errors rather
   than silently moving or shrinking doors. Wallcraft prevents invalid placement
   during editing.
 - Door appearance comes from the existing wall preset, with door fill and frame

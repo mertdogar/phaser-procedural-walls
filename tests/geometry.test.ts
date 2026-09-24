@@ -1,193 +1,138 @@
 import { describe, expect, it } from "vitest";
 import { cutRects, resolveWalls } from "../src/geometry";
-import type { WallSpec } from "../src/types";
+import type { Rect, WallSpec } from "../src/types";
 
-const presets = { p: { fill: 0, edge: 0, lipHeight: 10 }, flat: { fill: 0, edge: 0 } };
+const presets = { p: { fill: 0, edge: 0, lipHeight: 100 } };
 const wall = (x1: number, y1: number, x2: number, y2: number, extra: Partial<WallSpec> = {}): WallSpec =>
   ({ x1, y1, x2, y2, thickness: 20, preset: "p", ...extra });
+const door = { id: "entry", type: "hinged" as const, offset: 40, width: 60, height: 80 };
+const window = { offset: 40, width: 60, height: 20, sillHeight: 80 };
+const area = (rects: Rect[]) => rects.reduce((sum, rect) => sum + rect.w * rect.h, 0);
+const intersects = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
-describe("resolveWalls", () => {
-  it("rejects diagonal walls", () => {
+describe("floor-based walls", () => {
+  it("rejects diagonal walls and unknown presets", () => {
     expect(() => resolveWalls([wall(0, 0, 10, 10)], presets)).toThrow(/axis-aligned/);
+    expect(() => resolveWalls([wall(0, 0, 100, 0, { preset: "missing" })], presets)).toThrow(/Unknown/);
   });
-
-  it("extends both walls at an L corner by half the other's thickness", () => {
-    const [h, v] = resolveWalls([wall(0, 0, 100, 0), wall(0, 0, 0, 100)], presets);
-    expect(h.body).toEqual({ x: -10, y: -10, w: 110, h: 20 });
-    expect(v.body).toEqual({ x: -10, y: -10, w: 20, h: 110 });
+  it.each([0, 24, 80, 160])("keeps connected footprints and depth fixed at height %s", (height) => {
+    const [h, v] = resolveWalls([wall(0, 0, 200, 0, { height }), wall(0, 0, 0, 200, { height: 60 })], presets);
+    expect(h.collider).toEqual({ x: -10, y: -10, w: 210, h: 20 });
+    expect(v.collider).toEqual({ x: -10, y: -10, w: 20, h: 210 });
+    expect(h.body.y).toBe(-10 - height);
+    expect(v.body.y).toBe(-70);
+    expect(h.depth).toBe(10);
+    expect(v.depth).toBe(200);
   });
-
   it("extends only the stem at a T junction", () => {
     const [bar, stem] = resolveWalls([wall(0, 0, 200, 0), wall(100, 0, 100, 50, { thickness: 10 })], presets);
-    expect(bar.body).toEqual({ x: 0, y: -10, w: 200, h: 20 });
-    expect(stem.body).toEqual({ x: 95, y: -10, w: 10, h: 60 });
+    expect(bar.collider).toEqual({ x: 0, y: -10, w: 200, h: 20 });
+    expect(stem.collider).toEqual({ x: 95, y: -10, w: 10, h: 60 });
   });
-
-  it("normalizes reversed walls and remaps window offsets", () => {
-    const [w] = resolveWalls([wall(100, 0, 0, 0, { windows: [{ offset: 10, width: 20 }] })], presets);
-    expect(w.spec.x1).toBe(0);
-    expect(w.windows[0].x).toBe(70);
+  it.each([8, 20, 40])("centers thickness %s on the floor line", (thickness) => {
+    const [w] = resolveWalls([wall(0, 0, 100, 0, { thickness })], presets);
+    expect(w.collider).toEqual({ x: 0, y: -thickness / 2, w: 100, h: thickness });
   });
-
-  it("puts windows on the lip when there is one, else in the body", () => {
-    const [withLip] = resolveWalls([wall(0, 0, 100, 0, { windows: [{ offset: 30, width: 20 }] })], presets);
-    expect(withLip.windows[0]).toEqual({ x: 30, y: 12, w: 20, h: 6 });
-    expect(withLip.bodyPieces).toEqual([withLip.body]);
-    expect(withLip.lipPieces).toHaveLength(4);
-    expect(withLip.sills[0]).toEqual({ x: 30, y: 12, w: 20, h: 6 });
-    const [flat] = resolveWalls([wall(0, 0, 100, 0, { preset: "flat", windows: [{ offset: 30, width: 20 }] })], presets);
-    expect(flat.windows[0]).toEqual({ x: 30, y: -6, w: 20, h: 12 });
-    expect(flat.bodyPieces).toHaveLength(4);
-    expect(flat.sills).toEqual([]);
-  });
-
-  it.each([8, 20, 40])("uses wall thickness %s for the window sill", (thickness) => {
-    const [resolved] = resolveWalls([wall(0, 0, 100, 0, { thickness, height: 100, windows: [{ offset: 30, width: 20 }] })], presets);
-    expect(resolved.sills[0].h).toBe(thickness);
-    expect(resolved.sills[0].y + resolved.sills[0].h).toBe(resolved.windows[0].y + resolved.windows[0].h);
-  });
-
-  it("preserves explicit sill overrides and disabled sills", () => {
-    const spec = wall(0, 0, 100, 0, { height: 100, windows: [{ offset: 30, width: 20 }] });
-    expect(resolveWalls([spec], { p: { ...presets.p, sillHeight: 5 } })[0].sills[0].h).toBe(5);
-    expect(resolveWalls([spec], { p: { ...presets.p, sillHeight: 0 } })[0].sills).toEqual([]);
-  });
-
-  it("lets a wall override its preset height", () => {
-    const [resolved] = resolveWalls([wall(0, 0, 100, 0, { height: 30 })], presets);
-    expect(resolved.lip).toEqual({ x: 0, y: 10, w: 100, h: 30 });
-    expect(resolved.depth).toBe(40);
-  });
-
-  it("cutRects leaves holes for windows", () => {
-    const pieces = cutRects({ x: 0, y: 0, w: 100, h: 20 }, [{ x: 10, y: 5, w: 20, h: 10 }, { x: 60, y: 5, w: 20, h: 10 }], true);
-    expect(pieces).toEqual([
-      { x: 0, y: 0, w: 100, h: 5 },
-      { x: 0, y: 15, w: 100, h: 5 },
-      { x: 0, y: 5, w: 10, h: 10 },
-      { x: 30, y: 5, w: 30, h: 10 },
-      { x: 80, y: 5, w: 20, h: 10 },
-    ]);
-    expect(cutRects({ x: 0, y: 0, w: 20, h: 100 }, [{ x: 5, y: 40, w: 10, h: 20 }], false)).toHaveLength(4);
-  });
-
-  it("depth is the south edge including the lip", () => {
-    const [h, v] = resolveWalls([wall(0, 0, 100, 0), wall(0, 0, 0, 100, { preset: "flat" })], presets);
-    expect(h.depth).toBe(20);
-    expect(v.depth).toBe(100);
-    expect(v.lip).toBeNull();
-  });
-
-  it("allows a wall to override its automatic drawing depth", () => {
-    const [resolved] = resolveWalls([wall(0, 0, 100, 0, { depth: 250 })], presets);
-    expect(resolved.depth).toBe(250);
-    expect(resolved.collider.y).toBe(0);
-  });
-
-  it("projects both wall footprints to the bottom of the face", () => {
-    const [h, v] = resolveWalls([wall(0, 0, 100, 0), wall(0, 0, 0, 100)], presets);
-    expect(h.collider).toEqual({ x: -10, y: 0, w: 110, h: 20 });
-    expect(v.collider).toEqual({ x: -10, y: 0, w: 20, h: 110 });
-  });
-
-  it.each([0, 24, 80, 160])("preserves a vertical doorway when face height is %s", (height) => {
-    const [upper, lower] = resolveWalls([
-      wall(448, 96, 448, 320, { height }),
-      wall(448, 544, 448, 416, { height }),
-    ], presets);
-    expect(upper.collider).toEqual({ x: 438, y: 96 + height, w: 20, h: 224 });
-    expect(lower.collider).toEqual({ x: 438, y: 416 + height, w: 20, h: 128 });
-    expect(lower.collider.y - (upper.collider.y + upper.collider.h)).toBe(96);
-    const feet = { y: 368 + height - 8, h: 8 };
-    expect(feet.y).toBeGreaterThan(upper.collider.y + upper.collider.h);
-    expect(feet.y + feet.h).toBeLessThan(lower.collider.y);
-  });
-
-  it.each([8, 20, 40])("keeps horizontal footprint thickness %s independent of face height", (thickness) => {
-    const [resolved] = resolveWalls([wall(0, 0, 100, 0, { height: 80, thickness })], presets);
-    expect(resolved.collider).toEqual({ x: 0, y: 80 - thickness / 2, w: 100, h: thickness });
+  it("supports explicit depth without moving collision", () => {
+    const [w] = resolveWalls([wall(0, 0, 100, 0, { depth: 500 })], presets);
+    expect(w.depth).toBe(500);
+    expect(w.collider.y).toBe(-10);
+    expect(w.surfaces.every((s) => s.depth >= 500 && s.depth < 501)).toBe(true);
   });
 });
 
-describe("door geometry", () => {
-  it.each([0, 24, 160])("cuts horizontal and vertical collision passages at height %s", (height) => {
-    for (const horizontal of [true, false]) {
-      const door = { id: "entry", type: "hinged" as const, offset: 40, width: 60 };
-      const [resolved] = resolveWalls([wall(0, 0, horizontal ? 200 : 0, horizontal ? 0 : 200, { height, doors: [door] })], presets);
-      const r = resolved.doors[0].collider;
-      expect(r).toEqual(horizontal ? { x: 40, y: height - 10, w: 60, h: 20 } : { x: -10, y: height + 40, w: 20, h: 60 });
-      expect(resolved.colliderPieces).toHaveLength(2);
-      for (const piece of resolved.colliderPieces) {
-        expect(piece.x >= r.x + r.w || piece.x + piece.w <= r.x || piece.y >= r.y + r.h || piece.y + piece.h <= r.y).toBe(true);
-      }
-      expect(resolved.colliderPieces.reduce((sum, piece) => sum + piece.w * piece.h, 0)).toBe(140 * 20);
+describe("openings", () => {
+  it.each([true, false])("keeps door passages fixed when height changes (horizontal=%s)", (horizontal) => {
+    for (const height of [80, 100, 160]) {
+      const [w] = resolveWalls([wall(0, 0, horizontal ? 200 : 0, horizontal ? 0 : 200, { height, doors: [door] })], presets);
+      const r = w.doors[0].collider;
+      expect(r).toEqual(horizontal ? { x: 40, y: -10, w: 60, h: 20 } : { x: -10, y: 40, w: 20, h: 60 });
+      expect(w.colliderPieces.some((piece) => intersects(piece, r))).toBe(false);
+      expect(area(w.colliderPieces)).toBe(140 * 20);
     }
   });
-
-  it.each([0, 24, 80, 160])("projects vertical doorway tops and exposed faces at height %s", (height) => {
-    const [resolved] = resolveWalls([wall(0, 0, 0, 200, { height, doors: [
-      { id: "entry", type: "sliding", offset: 40, width: 60 },
-    ] })], presets);
-    expect(resolved.bodyPieces).toEqual([
-      { x: -10, y: 0, w: 20, h: 40 },
-      ...(100 + height < 200 ? [{ x: -10, y: 100 + height, w: 20, h: 100 - height }] : []),
-    ]);
-    expect(resolved.lipPieces).toEqual(height ? [
-      { x: -10, y: 40, w: 20, h: height },
-      ...(100 + height < 200 ? [{ x: -10, y: 200, w: 20, h: height }] : []),
-    ] : []);
-    expect(resolved.doors[0].collider).toEqual({ x: -10, y: 40 + height, w: 20, h: 60 });
+  it("projects both vertical segments upward, leaving the rear end face behind the door", () => {
+    const [w] = resolveWalls([wall(0, 0, 0, 200, { height: 80, doors: [door] })], presets);
+    expect(w.bodyPieces).toEqual([{ x: -10, y: -80, w: 20, h: 40 }, { x: -10, y: 20, w: 20, h: 100 }]);
+    expect(w.lipPieces).toEqual([{ x: -10, y: -40, w: 20, h: 80 }, { x: -10, y: 120, w: 20, h: 80 }]);
+    expect(w.surfaces.find((s) => s.kind === "lip" && s.rect.y === -40)?.depth).toBe(40);
+    expect(w.surfaces.find((s) => s.kind === "body" && s.rect.y === 20)!.depth).toBeGreaterThan(100);
   });
-
-  it("keeps windows intact while cutting a full-height horizontal doorway", () => {
-    const [resolved] = resolveWalls([wall(0, 0, 300, 0, { height: 80, windows: [{ offset: 20, width: 60 }], doors: [{ id: "entry", type: "sliding", offset: 150, width: 70 }] })], presets);
-    expect(resolved.windows).toHaveLength(1);
-    expect(resolved.sills).toHaveLength(1);
-    for (const rect of [...resolved.bodyPieces, ...resolved.lipPieces]) {
-      expect(rect.x + rect.w <= 150 || rect.x >= 220).toBe(true);
-    }
+  it("retains a header above a short door", () => {
+    const [w] = resolveWalls([wall(0, 0, 200, 0, { doors: [door] })], presets);
+    const header = { x: 40, y: -90, w: 60, h: 20 };
+    expect(w.lipPieces.some((piece) => intersects(piece, header))).toBe(true);
+    expect(w.lipPieces.some((piece) => intersects(piece, { ...header, y: -70, h: 80 }))).toBe(false);
+    expect(w.bodyPieces).toEqual([w.body]);
   });
-
-  it.each([true, false])("preserves door world placement and directions on reversed walls (horizontal=%s)", (horizontal) => {
-    const [resolved] = resolveWalls([wall(horizontal ? 200 : 0, horizontal ? 0 : 200, 0, 0, {
-      doors: [{ id: "reverse", type: "hinged", offset: 20, width: 40 }],
-    })], presets);
-    expect(resolved.doors[0].spec).toMatchObject({ offset: 140, side: "end", swing: "right" });
-    expect(horizontal ? resolved.doors[0].collider.x : resolved.doors[0].collider.y).toBe(horizontal ? 140 : 150);
+  it("keeps window height and elevation fixed when the wall gets taller", () => {
+    const specs = [100, 160].map((height) => resolveWalls([wall(0, 0, 200, 0, { height, windows: [window] })], presets)[0]);
+    expect(specs[0].windows).toEqual([{ x: 40, y: -90, w: 60, h: 20 }]);
+    expect(specs[1].windows).toEqual(specs[0].windows);
+    expect(specs[1].colliderPieces).toEqual([specs[1].collider]);
   });
-
-  it("accepts touching openings and doors at wall endpoints", () => {
-    expect(() => resolveWalls([wall(0, 0, 100, 0, { doors: [
-      { id: "a", type: "hinged", offset: 0, width: 40 },
-      { id: "b", type: "sliding", offset: 40, width: 60 },
-    ] })], presets)).not.toThrow();
+  it("separates decorative sill thickness from floor elevation", () => {
+    const spec = wall(0, 0, 200, 0, { windows: [window] });
+    const [w] = resolveWalls([spec], { p: { ...presets.p, sillThickness: 5 } });
+    expect(w.sills).toEqual([{ x: 40, y: -75, w: 60, h: 5 }]);
+    expect(resolveWalls([spec], { p: { ...presets.p, sillThickness: 0 } })[0].sills).toEqual([]);
   });
-
+  it("allows transoms above doors and stacked windows without removing the wall between them", () => {
+    const windows = [{ ...window, sillHeight: 90, height: 10 }, { ...window, sillHeight: 110, height: 10 }];
+    const [w] = resolveWalls([wall(0, 0, 200, 0, { height: 140, doors: [door], windows })], presets);
+    expect(area(w.lipPieces)).toBe(200 * 140 - 60 * 100);
+    expect(w.lipPieces.some((r) => intersects(r, { x: 40, y: -100, w: 60, h: 10 }))).toBe(true);
+    expect(area(w.colliderPieces)).toBe(140 * 20);
+  });
+  it.each([true, false])("normalizes reversed opening offsets and hinges (horizontal=%s)", (horizontal) => {
+    const [w] = resolveWalls([wall(horizontal ? 200 : 0, horizontal ? 0 : 200, 0, 0, { doors: [door], windows: [window] })], presets);
+    expect(w.doors[0].spec).toMatchObject({ offset: 100, side: "end", swing: "right", height: 80 });
+    expect(w.spec.windows![0]).toEqual({ ...window, offset: 100 });
+    expect(horizontal ? w.doors[0].collider.x : w.doors[0].collider.y).toBe(100);
+  });
   it.each([
-    [{ id: "a", type: "hinged", offset: -1, width: 20 }, /fit/],
-    [{ id: "a", type: "hinged", offset: 90, width: 20 }, /fit/],
-    [{ id: "a", type: "hinged", offset: 10, width: 0 }, /fit/],
-    [{ id: "a", type: "hinged", offset: NaN, width: 20 }, /fit/],
-    [{ id: "a", type: "other", offset: 10, width: 20 }, /type/],
-    [{ id: "", type: "hinged", offset: 10, width: 20 }, /ID/],
-    [{ id: "a", type: "hinged", offset: 10, width: 20, open: "true" }, /boolean/],
-    [{ id: "a", type: "hinged", offset: 10, width: 20, side: "up" }, /side/],
-    [{ id: "a", type: "hinged", offset: 10, width: 20, swing: "up" }, /swing/],
-  ])("rejects invalid door data %j", (door, error) => {
-    expect(() => resolveWalls([wall(0, 0, 100, 0, { doors: [door] as WallSpec["doors"] })], presets)).toThrow(error);
+    { height: undefined }, { height: 0 }, { height: -1 }, { height: 101 }, { height: NaN },
+    { offset: -1 }, { offset: 180 }, { width: 0 }, { width: Infinity },
+  ])("rejects invalid door dimensions %j", (patch) => {
+    expect(() => resolveWalls([wall(0, 0, 200, 0, { doors: [{ ...door, ...patch } as typeof door] })], presets)).toThrow(/fit/);
   });
-
-  it("rejects duplicate IDs across walls and overlapping openings", () => {
-    const door = { id: "a", type: "hinged" as const, offset: 20, width: 40 };
-    expect(() => resolveWalls([wall(0, 0, 100, 0, { doors: [door] }), wall(0, 100, 100, 100, { doors: [door] })], presets)).toThrow(/Duplicate/);
-    expect(() => resolveWalls([wall(0, 0, 100, 0, { doors: [door], windows: [{ offset: 50, width: 20 }] })], presets)).toThrow(/overlaps/);
-    expect(() => resolveWalls([wall(0, 0, 100, 0, { doors: [door, { ...door, id: "b" }] })], presets)).toThrow(/overlaps/);
+  it.each([{ sillHeight: undefined }, { sillHeight: -1 }, { height: undefined }, { height: 21 }, { offset: NaN }])("rejects invalid window dimensions %j", (patch) => {
+    expect(() => resolveWalls([wall(0, 0, 200, 0, { windows: [{ ...window, ...patch } as typeof window] })], presets)).toThrow(/fit/);
+  });
+  it("rejects overlap in elevation and position, while allowing touching edges", () => {
+    expect(() => resolveWalls([wall(0, 0, 200, 0, { doors: [door], windows: [window] })], presets)).not.toThrow();
+    expect(() => resolveWalls([wall(0, 0, 200, 0, { doors: [door], windows: [{ ...window, sillHeight: 79 }] })], presets)).toThrow(/overlaps/);
+    expect(() => resolveWalls([wall(0, 0, 200, 0, { windows: [window, window] })], presets)).toThrow(/overlaps/);
+    expect(() => resolveWalls([wall(0, 0, 200, 0, { doors: [door, { ...door, id: "next", offset: 100 }] })], presets)).not.toThrow();
+  });
+  it("rejects duplicate door IDs across walls and invalid door options", () => {
+    expect(() => resolveWalls([wall(0, 0, 200, 0, { doors: [door] }), wall(0, 200, 200, 200, { doors: [door] })], presets)).toThrow(/Duplicate/);
+    for (const patch of [{ id: "" }, { type: "other" }, { open: "true" }, { side: "up" }, { swing: "up" }]) {
+      expect(() => resolveWalls([wall(0, 0, 200, 0, { doors: [{ ...door, ...patch } as typeof door] })], presets)).toThrow();
+    }
+  });
+  it("rejects negative wall height and openings in zero-height walls", () => {
+    expect(() => resolveWalls([wall(0, 0, 200, 0, { height: -1 })], presets)).toThrow(/height/);
+    expect(() => resolveWalls([wall(0, 0, 200, 0, { height: 0, doors: [door] })], presets)).toThrow(/fit/);
   });
 });
 
-it("treats negative face height as disabled for door placement too", () => {
-  const doors = [{ id: "entry", type: "hinged" as const, offset: 40, width: 60 }];
-  const [resolved] = resolveWalls([wall(0, 0, 0, 200, { height: -20, doors })], presets);
-  expect(resolved.doors[0].collider).toEqual({ x: -10, y: 40, w: 20, h: 60 });
-  expect(resolved.colliderPieces).toHaveLength(2);
+it("subtracts differently placed holes without losing solid areas between them", () => {
+  const holes = [{ x: 10, y: 5, w: 20, h: 10 }, { x: 10, y: 20, w: 20, h: 10 }, { x: 60, y: 8, w: 20, h: 15 }];
+  for (const horizontal of [true, false]) {
+    const pieces = cutRects({ x: 0, y: 0, w: 100, h: 40 }, holes, horizontal);
+    expect(area(pieces)).toBe(3300);
+    expect(pieces.some((piece) => holes.some((hole) => intersects(piece, hole)))).toBe(false);
+  }
+});
+
+
+it("moves every vertical surface by the same drawing-order override without changing its floor position", () => {
+  const spec = wall(0, 0, 0, 200, { doors: [door] });
+  const [automatic] = resolveWalls([spec], presets);
+  const [overridden] = resolveWalls([{ ...spec, depth: 500 }], presets);
+  expect(overridden.surfaces.map((s) => s.floorY)).toEqual(automatic.surfaces.map((s) => s.floorY));
+  for (const [index, surface] of overridden.surfaces.entries()) {
+    expect(surface.depth - automatic.surfaces[index].depth).toBeCloseTo(300);
+  }
 });

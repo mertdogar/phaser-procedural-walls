@@ -41,9 +41,9 @@
       "windowFill": 8556657,
       "windowAlpha": 0.55,
       "windowInset": 0.65,
-      "sillHeight": 4,
       "doorFill": 14921860,
-      "doorFrame": 9265221
+      "doorFrame": 9265221,
+      "sillThickness": 4
     }
   },
   "walls": [
@@ -57,11 +57,15 @@
       "windows": [
         {
           "offset": 160,
-          "width": 96
+          "width": 96,
+          "height": 48.0,
+          "sillHeight": 16.0
         },
         {
           "offset": 448,
-          "width": 96
+          "width": 96,
+          "height": 48.0,
+          "sillHeight": 16.0
         }
       ],
       "height": 80,
@@ -97,7 +101,9 @@
       "windows": [
         {
           "offset": 384,
-          "width": 96
+          "width": 96,
+          "height": 48.0,
+          "sillHeight": 16.0
         }
       ],
       "height": 80,
@@ -116,7 +122,8 @@
           "type": "hinged",
           "offset": 195,
           "width": 96,
-          "swing": "right"
+          "swing": "right",
+          "height": 80
         }
       ],
       "height": 80,
@@ -134,7 +141,8 @@
           "id": "room-door",
           "type": "sliding",
           "offset": 192,
-          "width": 96
+          "width": 96,
+          "height": 80
         }
       ],
       "height": 80,

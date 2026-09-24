@@ -75,10 +75,10 @@ const wallMap = this.add.wallMap({
     brick: { fill: 0xb59a8c, edge: 0x4a3830, lipHeight: 88, lipFill: 0x8f7a70, windowFill: 0x3b7d86 },
   },
   walls: [
-    { x1: 0, y1: 0, x2: 400, y2: 0, thickness: 22, preset: "brick", windows: [{ offset: 60, width: 60 }] },
+    { x1: 0, y1: 0, x2: 400, y2: 0, thickness: 22, preset: "brick", windows: [{ offset: 60, width: 60, height: 48, sillHeight: 20 }] },
     { x1: 0, y1: 0, x2: 0, y2: 300, thickness: 22, preset: "brick" },
     { x1: 400, y1: 0, x2: 400, y2: 300, thickness: 22, preset: "brick" },
-    { x1: 0, y1: 300, x2: 400, y2: 300, thickness: 22, preset: "brick", windows: [{ offset: 170, width: 60 }] },
+    { x1: 0, y1: 300, x2: 400, y2: 300, thickness: 22, preset: "brick", windows: [{ offset: 170, width: 60, height: 48, sillHeight: 20 }] },
   ],
   collide: true,
 });
@@ -148,6 +148,21 @@ or packaged editor for a small Phaser-only example with property controls.
 See the [embedding guide](docs/wallcraft.md#embed-the-wall-editor-in-your-game)
 and [API reference](docs/api.md#walleditor). Existing renderer and geometry APIs
 are unchanged.
+
+## Floor-based coordinates (unreleased)
+
+Wall endpoints now describe the centerline on the floor. Height grows upward
+without moving collisions or junctions. This replaces the previous convention;
+there is no legacy rendering mode.
+
+Existing JSON must provide `height` for every door, and `height` plus `sillHeight`
+for every window. Rename preset `sillHeight` to `sillThickness`; the window field
+now means elevation above the floor. Missing or invalid dimensions produce errors.
+To preserve an old wall's floor position, add its old effective height to both
+endpoint y coordinates, then review junctions where neighboring heights differ.
+Leave coordinates unchanged to keep the authored floor plan and raise its walls.
+
+The historical release notes below describe earlier versions.
 
 ## 0.3.0 release notes
 

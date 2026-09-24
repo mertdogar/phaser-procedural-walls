@@ -64,12 +64,13 @@ interface WallSpec {
   windows?: WindowSpec[];
   doors?: DoorSpec[];
 }
-interface WindowSpec { offset: number; width: number }
+interface WindowSpec { offset: number; width: number; height: number; sillHeight: number }
 interface DoorSpec {
   id: string;
   type: "hinged" | "sliding";
   offset: number;
   width: number;
+  height: number;
   open?: boolean;
   side?: "start" | "end";
   swing?: "left" | "right";
@@ -79,7 +80,7 @@ interface WallPreset {
   edgeWidth?: number;
   lipHeight?: number; lipFill?: number;
   windowFill?: number; windowFrame?: number;
-  windowInset?: number; windowAlpha?: number; sillHeight?: number;
+  windowInset?: number; windowAlpha?: number; sillThickness?: number;
   texture?: string; lipTexture?: string;
   doorFill?: number; doorFrame?: number;
 }
@@ -123,15 +124,15 @@ map; `setWalls` and `redraw` reset all doors to their authored starting state.
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `edgeWidth` | `2` | Outline width |
-| `lipHeight` | `0` | Face height below the body |
+| `lipHeight` | `0` | Wall height above the floor |
 | `lipFill` | `fill` | Face color |
 | `doorFill` | `0x99734f` | Door panel color |
 | `doorFrame` | `edge` | Door frame and panel outline |
 | `windowFill` | `0x3d7f88` | Glass color |
 | `windowAlpha` | `0.5` | Glass opacity |
 | `windowFrame` | absent | Optional 1px frame color |
-| `windowInset` | `0.6` | Fraction of face height or body thickness |
-| `sillHeight` | Wall thickness | Opaque sill height, clamped to window height; an explicit value overrides it, and `0` disables it |
+| `windowInset` | `0.6` | Glass width across a vertical wall’s thickness |
+| `sillThickness` | Wall thickness | Opaque sill height, clamped to window height; an explicit value overrides it, and `0` disables it |
 | `texture` | absent | Loaded texture key for body and sills |
 | `lipTexture` | absent | Loaded texture key for face |
 
@@ -164,9 +165,9 @@ door's `{ spec, collider }` to add the blocker unless fully open.
 
 The south edge is `body.y + body.h + (lip?.h ?? 0)`:
 
-- Colliders match the body rectangle shifted south by the effective face height.
+- Colliders stay on the authored floor centerline; the body projects upward by wall height.
 - Both orientations preserve footprint dimensions; the raised face adds no
-  collision area. Equal-height segments preserve doorway gaps at floor level.
+  collision area. All heights preserve doorway gaps at floor level.
 - Default depth is the south edge. `wall.depth` overrides only draw order;
   larger depths draw later. Height changes geometry and colliders as well.
 
@@ -189,3 +190,8 @@ rather than being a game object itself.
 
 Both rebuild methods destroy and replace the static group. See
 [Phaser integration](integration.md) for reconnecting collisions.
+
+Opening dimensions are required and stay fixed as wall height changes. Windows
+use `sillHeight` for floor elevation; preset `sillThickness` is decorative.
+Openings must fit the wall and cannot overlap in both position and elevation.
+Windows can sit above doors. Short doors retain solid headers.

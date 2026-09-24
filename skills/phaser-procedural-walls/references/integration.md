@@ -35,7 +35,7 @@ const wallMap = this.add.wallMap({
   walls: [{
     x1: 32, y1: 96, x2: 480, y2: 96,
     thickness: 20, preset: "brick",
-    windows: [{ offset: 80, width: 64 }],
+    windows: [{ offset: 80, width: 64, height: 24, sillHeight: 12 }],
   }],
   collide: true,
 });

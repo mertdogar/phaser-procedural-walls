@@ -1,6 +1,6 @@
 import type { WallMapConfig, WallSpec, WindowSpec } from "../src/types";
 
-const win = (...offsets: number[]): WindowSpec[] => offsets.map((offset) => ({ offset, width: 60 }));
+const win = (...offsets: number[]): WindowSpec[] => offsets.map((offset) => ({ offset, width: 60, height: 48, sillHeight: 16 }));
 const ext = (x1: number, y1: number, x2: number, y2: number, windows?: WindowSpec[]): WallSpec =>
   ({ x1, y1, x2, y2, thickness: 22, preset: "exterior", windows });
 const int = (x1: number, y1: number, x2: number, y2: number): WallSpec =>
@@ -10,25 +10,25 @@ export const presets: WallMapConfig["presets"] = {
   exterior: {
     fill: 0xb59a8c, edge: 0x4a3830, edgeWidth: 2,
     lipHeight: 88, lipFill: 0x8f7a70,
-    windowFill: 0x3b7d86, windowFrame: 0x24484d, windowInset: 0.55, sillHeight: 12,
+    windowFill: 0x3b7d86, windowFrame: 0x24484d, windowInset: 0.55, sillThickness: 12,
     texture: "bricks", lipTexture: "bricks",
   },
   interior: {
     fill: 0xc2a89a, edge: 0x4a3830, edgeWidth: 2,
     lipHeight: 88, lipFill: 0x9a857a,
-    windowFill: 0x3b7d86, windowInset: 0.55, sillHeight: 12,
+    windowFill: 0x3b7d86, windowInset: 0.55, sillThickness: 12,
     texture: "plaster", lipTexture: "panel",
   },
   planks: {
     fill: 0x8a5a3a, edge: 0x3f2818, edgeWidth: 2,
     lipHeight: 88, lipFill: 0x6b4630,
-    windowFill: 0x3b7d86, windowInset: 0.55, sillHeight: 12,
+    windowFill: 0x3b7d86, windowInset: 0.55, sillThickness: 12,
     texture: "planks", lipTexture: "planks",
   },
   stone: {
     fill: 0x707075, edge: 0x2e2e33, edgeWidth: 2,
     lipHeight: 88, lipFill: 0x55555a,
-    windowFill: 0x3b7d86, windowInset: 0.55, sillHeight: 12,
+    windowFill: 0x3b7d86, windowInset: 0.55, sillThickness: 12,
     texture: "stone", lipTexture: "stone",
   },
 };

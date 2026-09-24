@@ -43,12 +43,13 @@ These details prevent integrations that compile but render or collide wrongly.
 - Walls are axis-aligned centerlines, not polygon outlines. Keep coordinates
   finite, thickness positive, and endpoints distinct. Diagonals aren't supported.
 - Every wall names an existing preset. Window offsets start at the original
-  first endpoint; keep positive widths inside the segment and avoid overlaps.
+  first endpoint. Openings require height; windows also require floor-relative
+  sillHeight. They must fit and cannot intersect in both position and elevation.
 - Windows remain solid for collision. Functional doors use wall-owned `doors`
   entries with unique IDs and `type: "hinged" | "sliding"`. The game controls
   opening and closing and checks occupancy before closure.
-- `height` overrides preset `lipHeight`; it changes the face and collision
-  position. `depth` changes draw order only. Don't change height to fix ordering.
+- `height` overrides preset `lipHeight`; it raises the wall upward while the floor
+  footprint stays fixed. `depth` changes draw order only. Don't change height to fix ordering.
 - Register the scene plugin before calling `this.add.wallMap(config)`.
   `collide: true` creates bodies but doesn't attach a player collider for you.
 - A map rebuild replaces its static group. Reconnect any player collider after

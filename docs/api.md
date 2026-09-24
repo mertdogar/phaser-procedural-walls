@@ -35,6 +35,7 @@ Pass these fields when you construct the editor:
 | `tool` | Required | `"wall"` to draw or `"select"` to select and drag handles. |
 | `onAddWall(wall)` | Required | Requests adding a `WallSpec` after a draw gesture finishes. |
 | `onSelectWall(index)` | Required | Requests selecting a wall, or clearing selection with `null`. |
+| `onError(message)` | Optional | Reports invalid drags and keeps the last valid geometry. Without a handler, validation errors throw. An empty message clears the error. |
 | `onUpdateWall(index, patch)` | Required | Requests a whole-wall, endpoint, window-offset, or door-offset edit when a drag finishes. |
 | `enabled` | `true` | Whether editing input and the overlay are active. |
 | `camera` | `scene.cameras.main` | Camera used to convert pointer coordinates and size handles. |
@@ -112,8 +113,7 @@ deletion, preset and dimension controls, window creation/removal, and cleanup.
 
 Validate proposed edits before accepting them if your application has placement
 rules. Door drags, window drags, and endpoint edits reject changes that would
-place doors outside the wall or overlap another opening. The component does not validate world bounds, occupants, connectivity,
-window overlap, or windows extending past a resized wall. To refuse an edit,
+place doors outside the wall or overlap another opening. The component does not validate world bounds, occupants, or connectivity. Opening overlap and wall bounds are validated by the library. To refuse an edit,
 keep the current config and show your own message. Feed authoritative replacement
 configs through `setState` to cancel gestures based on stale data.
 
@@ -159,9 +159,9 @@ The upload control accepts files up to 5 MB each. Images repeat at their origina
 
 | field | type | required | description |
 | --- | --- | --- | --- |
-| `x1`, `y1`, `x2`, `y2` | `number` | yes | Centerline endpoints in world units. Either `x1 === x2` or `y1 === y2`; diagonal walls throw. Endpoint order does not matter. |
+| `x1`, `y1`, `x2`, `y2` | `number` | yes | Floor-footprint centerline endpoints in world units. Either `x1 === x2` or `y1 === y2`; diagonal walls throw. Endpoint order does not matter. |
 | `thickness` | `number` | yes | Wall body thickness across the centerline. |
-| `height` | `number` | no | Height of this wall's face below the body. Overrides the preset's `lipHeight`. |
+| `height` | `number` | no | Nonnegative height above the floor; grows upward without moving collision. Overrides the preset's `lipHeight`. |
 | `depth` | `number` | no | Explicit Phaser drawing depth for this wall. Defaults to the wall's south edge. Higher values draw later. |
 | `preset` | `string` | yes | Key into `presets`. Unknown keys throw. |
 | `windows` | `WindowSpec[]` | no | Windows along this wall. |
@@ -172,14 +172,17 @@ The upload control accepts files up to 5 MB each. Images repeat at their origina
 | field | type | description |
 | --- | --- | --- |
 | `offset` | `number` | Distance in world units from the wall's `(x1, y1)` end to the window's near edge, measured before any endpoint normalization. |
-| `width` | `number` | Window width along the wall. |
+| `width` | `number` | Required positive window width along the wall. |
+| `height` | `number` | Required positive, finite window height. |
+| `sillHeight` | `number` | Required nonnegative distance from the floor to the window bottom. |
 
 ### DoorSpec
 
 Doors belong to their wall and use its preset. Each ID must be non-empty and
 unique across the map. Invalid IDs, types, placement, or option values throw.
-Doors must fit within the authored segment and cannot overlap a window or
-another door on that segment. Touching opening edges are allowed.
+Openings must fit within the authored wall length and height. They conflict only
+when both their along-wall and elevation intervals overlap. Touching edges and
+windows above doors are allowed. Dimensions remain fixed when wall height changes.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -187,6 +190,7 @@ another door on that segment. Touching opening edges are allowed.
 | `type` | `DoorType` | Required | `"hinged"` or `"sliding"`. |
 | `offset` | `number` | Required | Nonnegative distance from the authored wall start to the near edge. |
 | `width` | `number` | Required | Positive, finite passage width along the wall. |
+| `height` | `number` | Required | Positive, finite panel height above the floor. Wall remains above shorter doors. |
 | `open` | `boolean` | `false` | Authored starting state, restored on rebuild. |
 | `side` | `"start" \| "end"` | `"start"` | Hinge end or sliding retraction side, relative to authored wall direction. |
 | `swing` | `"left" \| "right"` | `"left"` | Hinged swing side when looking from `(x1, y1)` toward `(x2, y2)`. Ignored for sliding doors. |
@@ -201,8 +205,8 @@ Reversed endpoints preserve these authored directions through normalization.
 const wallMap = this.add.wallMap({
   presets: { interior: { fill: 0xe7ded0, edge: 0x3c403a, doorFill: 0x99734f } },
   walls: [{
-    x1: 0, y1: 0, x2: 320, y2: 0, thickness: 16, preset: "interior",
-    doors: [{ id: "kitchen-door", type: "hinged", offset: 112, width: 96 }],
+    x1: 0, y1: 0, x2: 320, y2: 0, thickness: 16, height: 100, preset: "interior",
+    doors: [{ id: "kitchen-door", type: "hinged", offset: 112, width: 96, height: 80 }],
   }],
   collide: true,
 });
@@ -216,7 +220,7 @@ wallMap.openDoor("kitchen-door");
 | `fill` | `number` | required | Wall body color. Also used for sills. Ignored for the body when `texture` is set. |
 | `edge` | `number` | required | Outline stroke color for body, lip, and sill top edge. |
 | `edgeWidth` | `number` | `2` | Outline stroke width. |
-| `lipHeight` | `number` | `0` | Height of the face drawn below the body. `0` disables the face. |
+| `lipHeight` | `number` | `0` | Default wall height above the floor. `0` disables the face and forbids openings. |
 | `lipFill` | `number` | `fill` | Face color. Ignored when `lipTexture` is set. |
 | `texture` | `string` | none | Texture key tiled across the body with a TileSprite. |
 | `lipTexture` | `string` | none | Texture key tiled across the face. |
@@ -225,8 +229,8 @@ wallMap.openDoor("kitchen-door");
 | `windowFill` | `number` | `0x3d7f88` | Glass color. |
 | `windowAlpha` | `number` | `0.5` | Glass alpha. `1` makes windows opaque. |
 | `windowFrame` | `number` | none | When set, a 1px frame is stroked around each window. |
-| `windowInset` | `number` | `0.6` | Fraction of the face height (or body thickness when there is no face) the window occupies. |
-| `sillHeight` | `number` | Wall thickness | Height of the opaque band at the bottom of each face window, clamped to the window height. Omit to follow each wall's thickness; an explicit number overrides it. `0` disables sills. |
+| `windowInset` | `number` | `0.6` | Fraction of wall thickness occupied by glass on vertical walls; window height is explicit. |
+| `sillThickness` | `number` | Wall thickness | Height of the opaque band at the bottom of each face window, clamped to the window height. Omit to follow each wall's thickness; an explicit number overrides it. `0` disables sills. |
 
 Texture keys must exist in the scene's Texture Manager before `wallMap` is called.
 
@@ -237,7 +241,7 @@ The handle returned by the factory. It is not itself a Game Object; it owns wall
 | member | type | description |
 | --- | --- | --- |
 | `scene` | `Phaser.Scene` | Owning scene. |
-| `containers` | `Phaser.GameObjects.Container[]` | Wall containers in input order, each followed by its door containers. Door panels use their floor position for depth unless the wall overrides `depth`. |
+| `containers` | `Phaser.GameObjects.Container[]` | Surface containers in wall input order, followed by each wall’s door containers. Door panels use their floor position for depth unless the wall overrides `depth`. |
 | `bodies` | `Phaser.Physics.Arcade.StaticGroup \| null` | Static bodies when `collide` was true, otherwise `null`. Pass to `physics.add.collider`. |
 | `setWalls(walls)` | `(walls: WallSpec[]) => this` | Replaces the wall list and rebuilds everything. |
 | `redraw()` | `() => this` | Rebuilds with the current config. Call after changing texture contents. |
@@ -273,7 +277,8 @@ Normalizes each wall, computes endpoint extensions, and produces every rectangle
 | `spec` | `WallSpec` | The normalized input, with `x1 <= x2` and `y1 <= y2`. |
 | `horizontal` | `boolean` | `true` when `y1 === y2`. |
 | `body` | `Rect` | Wall top including endpoint extensions. |
-| `lip` | `Rect \| null` | Face below the body, `null` when the effective height (`height` override or preset `lipHeight`) is zero or negative. |
+| `lip` | `Rect \| null` | Bounding south face below the raised body; `null` when effective wall height is zero. Negative heights throw. |
+| `surfaces` | `WallSurface[]` | Projected rectangles with material `kind`, floor south edge `floorY`, and drawing `depth`. |
 | `bodyPieces` | `Rect[]` | Body with window and door holes cut out. |
 | `lipPieces` | `Rect[]` | Face with window and door holes cut out. |
 | `windows` | `Rect[]` | Glass rectangles. |

@@ -63,7 +63,7 @@ export class EmbeddedEditorScene extends Phaser.Scene {
         update(selectedIndex, { height: wall.height === 96 ? 48 : 96 });
       } else if (event.key.toLowerCase() === "w") {
         const length = Math.abs(wall.x2 - wall.x1) + Math.abs(wall.y2 - wall.y1);
-        update(selectedIndex, { windows: wall.windows?.length ? [] : [{ offset: 0, width: Math.min(64, length) }] });
+        update(selectedIndex, { windows: wall.windows?.length ? [] : [{ offset: 0, width: Math.min(64, length), height: (wall.height ?? config.presets[wall.preset].lipHeight ?? 0) / 2, sillHeight: (wall.height ?? config.presets[wall.preset].lipHeight ?? 0) / 4 }] });
       }
     };
     this.input.keyboard?.on("keydown", onKey);

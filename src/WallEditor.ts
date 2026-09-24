@@ -1,11 +1,12 @@
 import Phaser from "phaser";
-import { resolveWalls, validateDoors } from "./geometry";
+import { resolveWalls, validateOpenings } from "./geometry";
 import { WallMap } from "./WallMap";
 import type { WallMapConfig, WallSpec, WindowSpec } from "./types";
 
 export type WallEditorTool = "select" | "wall";
 
 export interface WallEditorCallbacks {
+  onError?: (message: string) => void;
   onAddWall: (wall: WallSpec) => void;
   onSelectWall: (index: number | null) => void;
   onUpdateWall: (index: number, patch: Partial<WallSpec>) => void;
@@ -227,7 +228,7 @@ export class WallEditor {
       const wall = this.moveOpening(drag.wall, drag.openingIndex, drag.kind, pointer.worldX, pointer.worldY);
       this.openingDrag = null;
       this.scene.input.setDefaultCursor("default");
-      this.callbacks.onUpdateWall(drag.index, { [drag.kind]: wall[drag.kind] });
+      if (wall !== drag.wall) this.callbacks.onUpdateWall(drag.index, { [drag.kind]: wall[drag.kind] });
       this.refresh();
       return;
     }
@@ -240,7 +241,7 @@ export class WallEditor {
       );
       this.anchorDrag = null;
       this.scene.input.setDefaultCursor("default");
-      if (Phaser.Math.Distance.Between(wall.x1, wall.y1, wall.x2, wall.y2) >= this.gridSize) {
+      if (wall !== drag.wall && Phaser.Math.Distance.Between(wall.x1, wall.y1, wall.x2, wall.y2) >= this.gridSize) {
         this.callbacks.onUpdateWall(drag.index, {
           x1: wall.x1,
           y1: wall.y1,
@@ -311,7 +312,15 @@ export class WallEditor {
         nearest = { index, distance };
       }
     }
-    return nearest?.index ?? null;
+    if (nearest) return nearest.index;
+    let visible: { index: number; depth: number } | null = null;
+    for (const [index, wall] of resolveWalls(this.configData.walls, this.configData.presets).entries()) {
+      for (const { rect, depth } of wall.surfaces) {
+        if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h
+          && (!visible || depth >= visible.depth)) visible = { index, depth };
+      }
+    }
+    return visible?.index ?? null;
   }
 
   private onSelectedLine(x: number, y: number): boolean {
@@ -356,8 +365,13 @@ export class WallEditor {
   private getOpeningRects(wall: WallSpec) {
     const resolved = resolveWalls([wall], this.configData.presets)[0];
     return [
-      ...resolved.windows.map((rect, openingIndex) => ({ rect, openingIndex, kind: "windows" as const })),
-      ...resolved.doors.map((door, openingIndex) => ({ rect: door.collider, openingIndex, kind: "doors" as const })),
+      ...resolved.spec.windows?.map((win, openingIndex) => ({
+        rect: resolved.horizontal
+          ? { x: resolved.spec.x1 + win.offset, y: resolved.collider.y - win.sillHeight - win.height / 2, w: win.width, h: wall.thickness }
+          : { x: resolved.collider.x, y: resolved.spec.y1 + win.offset - win.sillHeight - win.height / 2, w: wall.thickness, h: win.width },
+        openingIndex, kind: "windows" as const,
+      })) ?? [],
+      ...resolved.doors.map((door, openingIndex) => ({ rect: { ...door.collider, y: door.collider.y - door.spec.height / 2 }, openingIndex, kind: "doors" as const })),
     ];
   }
 
@@ -367,16 +381,21 @@ export class WallEditor {
     if (!opening) return wall;
     const horizontal = wall.y1 === wall.y2;
     const direction = horizontal ? Math.sign(wall.x2 - wall.x1) || 1 : Math.sign(wall.y2 - wall.y1) || 1;
-    const height = kind === "doors" && !horizontal ? Math.max(0, wall.height ?? this.configData.presets[wall.preset].lipHeight ?? 0) : 0;
-    const pointerOffset = horizontal ? (x - wall.x1) * direction : (y - height - wall.y1) * direction;
+    const height = kind === "windows" ? (opening as WindowSpec).sillHeight + opening.height / 2 : opening.height / 2;
+    const pointerOffset = horizontal ? (x - wall.x1) * direction : (y + height - wall.y1) * direction;
     const length = Math.abs(wall.x2 - wall.x1) + Math.abs(wall.y2 - wall.y1);
     const offset = Phaser.Math.Clamp(
       Math.round((pointerOffset - opening.width / 2) / this.gridSize) * this.gridSize,
       0, Math.max(0, length - opening.width),
     );
-    openings[openingIndex] = { ...opening, offset } satisfies WindowSpec;
+    openings[openingIndex] = { ...opening, offset };
     const next = { ...wall, [kind]: openings };
-    try { validateDoors([next]); } catch { return wall; }
+    try { validateOpenings([next], this.configData.presets); } catch (error) {
+      if (!this.callbacks.onError) throw error;
+      this.callbacks.onError(error instanceof Error ? error.message : "Invalid opening");
+      return wall;
+    }
+    this.callbacks.onError?.("");
     return next;
   }
 
@@ -388,7 +407,12 @@ export class WallEditor {
     const next = endpoint === "start"
       ? { ...wall, x1: moved.x, y1: moved.y }
       : { ...wall, x2: moved.x, y2: moved.y };
-    try { validateDoors([next]); } catch { return wall; }
+    try { validateOpenings([next], this.configData.presets); } catch (error) {
+      if (!this.callbacks.onError) throw error;
+      this.callbacks.onError(error instanceof Error ? error.message : "Invalid opening");
+      return wall;
+    }
+    this.callbacks.onError?.("");
     return next;
   }
 

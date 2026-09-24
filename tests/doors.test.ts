@@ -30,7 +30,7 @@ function setup(type: DoorType = "hinged", open = false, collide = true) {
     } },
   };
   const config: WallMapConfig = { presets: { p: { fill: 0, edge: 0, lipHeight: 24 } }, collide, walls: [
-    { x1: 0, y1: 0, x2: 200, y2: 0, thickness: 20, preset: "p", doors: [{ id: "entry", type, offset: 50, width: 80, open }] },
+    { x1: 0, y1: 0, x2: 200, y2: 0, thickness: 20, preset: "p", doors: [{ id: "entry", type, height: 24, offset: 50, width: 80, open }] },
   ] };
   const map = new WallMap(scene as unknown as Phaser.Scene, config);
   const tick = (delta: number) => {
@@ -82,7 +82,7 @@ describe.each(["hinged", "sliding"] as const)("%s door runtime", (type) => {
     map.redraw();
     expect(map.getDoorState("entry")).toBe("open");
     expect(bodies.at(-1)!.enable).toBe(false);
-    map.setWalls([{ ...config.walls[0], doors: [{ id: "new", type, offset: 10, width: 50 }] }]);
+    map.setWalls([{ ...config.walls[0], doors: [{ id: "new", type, height: 24, offset: 10, width: 50 }] }]);
     expect(() => map.getDoorState("entry")).toThrow(/Unknown/);
     expect(map.getDoorState("new")).toBe("closed");
     map.destroy();
@@ -101,7 +101,7 @@ describe.each(["hinged", "sliding"] as const)("%s door runtime", (type) => {
 
 it("keeps the current map after rejecting invalid replacement data", () => {
   const { map, config } = setup();
-  expect(() => map.setWalls([{ ...config.walls[0], doors: [{ id: "invalid", type: "hinged", offset: 190, width: 80 }] }])).toThrow(/fit/);
+  expect(() => map.setWalls([{ ...config.walls[0], doors: [{ id: "invalid", type: "hinged", height: 24, offset: 190, width: 80 }] }])).toThrow(/fit/);
   expect(map.getDoorState("entry")).toBe("closed");
 });
 
@@ -120,27 +120,26 @@ it("round-trips door configuration and rejects invalid imported maps", () => {
 });
 
 describe.each(["start", "end"] as const)("vertical door hinged at %s", (side) => {
-  it.each(["left", "right"] as const)("reveals the compact %s face while keeping its height and hardware fixed", (swing) => {
+  it.each(["left", "right"] as const)("projects the %s panel at its actual height throughout rotation", (swing) => {
     const { map, config, drawings, tick, bodies } = setup();
-    map.setWalls([{ ...config.walls[0], x2: 0, y2: 200, height: 80, depth: 500,
-      doors: [{ id: "entry", type: "hinged", offset: 50, width: 80, side, swing }],
+    map.setWalls([{ ...config.walls[0], x2: 0, y2: 200, height: 100,
+      doors: [{ id: "entry", type: "hinged", height: 80, offset: 50, width: 60, side, swing }],
     }]);
     const panel = drawings.at(-1)!;
-    expect(panel.strokeRect).toHaveBeenLastCalledWith(-2, 130, 4, 80);
+    const top = () => panel.fillPoints.mock.calls.at(-1)![0] as { x: number; y: number }[];
+    expect(Math.min(...top().map((p) => p.y))).toBeCloseTo(-30);
+    expect(Math.max(...top().map((p) => p.y))).toBeCloseTo(30);
     map.openDoor("entry");
     tick(125);
-    const halfway = panel.strokeRect.mock.calls.at(-1)!;
-    expect(halfway[2]).toBeCloseTo(4 / Math.SQRT2);
-    expect(halfway[3]).toBe(40);
     expect(bodies.at(-1)!.enable).toBe(true);
     tick(125);
-    const open = panel.strokeRect.mock.calls.at(-1)!;
-    expect(open).toEqual([swing === "right" ? 2 : -6, side === "start" ? 130 : 170, 4, 40]);
-    expect(map.containers.at(-1)!.setDepth).toHaveBeenLastCalledWith(500 + 0.000001);
+    expect(Math.max(...top().map((p) => p.x)) - Math.min(...top().map((p) => p.x))).toBeCloseTo(60);
+    const face = panel.fillPoints.mock.calls.at(-2)![0] as { x: number; y: number }[];
+    expect(face[2].y - face[1].y).toBe(80);
     expect(bodies.at(-1)!.enable).toBe(false);
     map.closeDoor("entry");
     tick(250);
-    expect(panel.strokeRect).toHaveBeenLastCalledWith(-2, 130, 4, 80);
+    expect(Math.min(...top().map((p) => p.y))).toBeCloseTo(-30);
     expect(bodies.at(-1)!.enable).toBe(true);
   });
 });
@@ -155,4 +154,39 @@ it("retracts a vertical sliding panel completely", () => {
   expect(panel.clear).toHaveBeenCalled();
   expect(panel.fillPoints).not.toHaveBeenCalled();
   expect(map.getDoorState("entry")).toBe("open");
+});
+
+
+it("rejects imported legacy openings and preserves explicit window dimensions in JSON", () => {
+  const { config } = setup();
+  config.walls[0].height = 100;
+  config.walls[0].windows = [{ offset: 50, width: 80, height: 20, sillHeight: 60 }];
+  expect(parseWallConfig(serializeWallConfig(config))).toEqual(config);
+  const legacy = JSON.parse(serializeWallConfig(config));
+  delete legacy.walls[0].doors[0].height;
+  expect(() => parseWallConfig(JSON.stringify(legacy))).toThrow(/height/);
+  legacy.walls[0].doors[0].height = 24;
+  delete legacy.walls[0].windows[0].sillHeight;
+  expect(() => parseWallConfig(JSON.stringify(legacy))).toThrow(/sillHeight/);
+});
+
+
+it.each(["left", "right"] as const)("exposes a short vertical door on its %s swing side without moving collision", (swing) => {
+  const { map, config, drawings, tick, bodies } = setup();
+  map.setWalls([{ ...config.walls[0], x2: 0, y2: 200, height: 100,
+    doors: [{ id: "entry", type: "hinged", offset: 50, width: 60, height: 80, swing }],
+  }]);
+  const panel = drawings.at(-1)!;
+  const top = () => panel.fillPoints.mock.calls.at(-1)![0] as { x: number; y: number }[];
+  const hingeX = swing === "left" ? 10 : -10;
+  expect(Math.min(...top().map((p) => p.x))).toBeCloseTo(hingeX - 4);
+  expect(Math.max(...top().map((p) => p.x))).toBeCloseTo(hingeX + 4);
+  expect(bodies.at(-1)!.enable).toBe(true);
+  map.openDoor("entry");
+  tick(250);
+  expect(top()[0].x).toBeCloseTo(hingeX);
+  expect(bodies.at(-1)!.enable).toBe(false);
+  map.closeDoor("entry");
+  tick(250);
+  expect(Math.min(...top().map((p) => p.x))).toBeCloseTo(hingeX - 4);
 });

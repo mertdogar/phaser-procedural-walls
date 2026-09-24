@@ -71,10 +71,10 @@ create() {
       },
     },
     walls: [
-      { x1: 200, y1: 150, x2: 600, y2: 150, thickness: 22, preset: "brick", windows: [{ offset: 60, width: 60 }] },
+      { x1: 200, y1: 150, x2: 600, y2: 150, thickness: 22, preset: "brick", windows: [{ offset: 60, width: 60, height: 48, sillHeight: 20 }] },
       { x1: 200, y1: 150, x2: 200, y2: 450, thickness: 22, preset: "brick" },
       { x1: 600, y1: 150, x2: 600, y2: 450, thickness: 22, preset: "brick" },
-      { x1: 200, y1: 450, x2: 600, y2: 450, thickness: 22, preset: "brick", windows: [{ offset: 280, width: 60 }] },
+      { x1: 200, y1: 450, x2: 600, y2: 450, thickness: 22, preset: "brick", windows: [{ offset: 280, width: 60, height: 48, sillHeight: 20 }] },
     ],
     collide: true,
   });
@@ -139,7 +139,7 @@ Walk down toward the south wall. The character keeps going into the wall zone an
 
 ![Player visible through the window](images/player-behind-window.jpg)
 
-The room is closed, so you cannot walk through its walls or windows. To compare the outside view, temporarily change the player spawn to `(400, 570)`, save, then push up against the south wall. The character stops at the face and is drawn in front of it. To create a doorway, split a wall into two segments with a gap.
+The room is closed, so you cannot walk through its walls or windows. To compare the outside view, temporarily change the player spawn to `(400, 480)`, save, then push up against the south wall. The character stops at the face and is drawn in front of it. To create a doorway, split a wall into two segments with a gap.
 
 ## Where to go next
 

@@ -74,12 +74,12 @@ Map preferences applies height or thickness to every existing wall using separat
 Apply to all buttons. Height accepts zero; thickness must be positive. Bulk
 height replaces wall overrides. Presets and future walls remain unchanged.
 
-Blank preset Sill height follows each wall's thickness, clipped to window height.
-Explicit values, including those imported from older maps, override this; zero
-disables sills. A short opening can be fully covered by its sill.
+Blank preset Sill thickness follows each wall's thickness, clipped to window height.
+Explicit values override this; zero disables sills. Rename the old preset
+`sillHeight` field to `sillThickness`. A short opening can be fully covered by its sill.
 
-Preview collisions use body footprints shifted south by face height. Keep face
-heights equal around aligned doorway gaps. Windows remain visual, not walkable.
+Preview collisions use the fixed floor footprint. Changing height raises the
+wall without shifting doorway gaps. Windows remain visual, not walkable.
 
 Preview also sorts its player against overlapping wall footprints while retaining
 custom wall depths. This is editor-only logic, not part of JSON exports or the

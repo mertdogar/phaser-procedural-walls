@@ -532,22 +532,30 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
   const updateDoor = (doorIndex: number, patch: Partial<DoorSpec>) => {
     onUpdateWall(selectedIndex, { doors: wall.doors?.map((door, index) => index === doorIndex ? { ...door, ...patch } : door) });
   };
-  const occupied = [...(wall.windows ?? []), ...(wall.doors ?? [])].sort((a, b) => a.offset - b.offset);
-  let doorOffset = 0;
-  for (const opening of occupied) {
-    if (opening.offset - doorOffset >= 64) break;
-    doorOffset = Math.max(doorOffset, opening.offset + opening.width);
-  }
-  const updateWindow = (windowIndex: number, key: "offset" | "width", value: string) => {
+  const wallHeight = wall.height ?? config.presets[wall.preset]?.lipHeight ?? 0;
+  const findOffset = (width: number, height: number, sillHeight: number) => {
+    const occupied = [
+      ...(wall.windows ?? []),
+      ...(wall.doors ?? []).map((door) => ({ ...door, sillHeight: 0 })),
+    ].filter((opening) => opening.sillHeight < sillHeight + height && opening.sillHeight + opening.height > sillHeight)
+      .sort((a, b) => a.offset - b.offset);
+    let offset = 0;
+    for (const opening of occupied) {
+      if (opening.offset - offset >= width) break;
+      offset = Math.max(offset, opening.offset + opening.width);
+    }
+    return offset;
+  };
+  const doorHeight = Math.min(80, wallHeight);
+  const doorOffset = findOffset(64, doorHeight, 0);
+  const windowWidth = Math.min(64, wallLength);
+  const windowOffset = findOffset(windowWidth, wallHeight / 2, wallHeight / 4);
+  const updateWindow = (windowIndex: number, key: "offset" | "width" | "height" | "sillHeight", value: string) => {
     const number = Number(value);
     const window = wall.windows?.[windowIndex];
     if (!window || value === "" || !Number.isFinite(number)) return;
-    const maximum = wallLength - (key === "offset" ? window.width : window.offset);
-    const minimum = key === "offset" ? 0 : 1;
-    if (maximum < minimum) return;
     const windows = wall.windows?.map((item, index) => index === windowIndex
-      ? { ...item, [key]: Math.min(Math.max(minimum, number), maximum) }
-      : item);
+      ? { ...item, [key]: number } : item);
     onUpdateWall(selectedIndex, { windows });
   };
   return (
@@ -585,7 +593,7 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
           value={wall.height ?? config.presets[wall.preset]?.lipHeight ?? 0}
           onChange={(event) => updateNumber("height", event.target.value)}
         />
-        <FieldDescription>Visible wall face height in pixels.</FieldDescription>
+        <FieldDescription>Height above the floor in pixels.</FieldDescription>
       </Field>
       <Field>
         <FieldLabel htmlFor={`depth-${selectedIndex}`}>Drawing order</FieldLabel>
@@ -611,9 +619,10 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
           <Button
             variant="outline"
             size="xs"
+            disabled={wallHeight <= 0 || windowOffset + windowWidth > wallLength}
             onClick={() => {
-              const width = Math.min(64, Math.max(32, wallLength - 32));
-              onUpdateWall(selectedIndex, { windows: [...(wall.windows ?? []), { offset: Math.max(16, (wallLength - width) / 2), width }] });
+              const width = Math.min(64, wallLength);
+              onUpdateWall(selectedIndex, { windows: [...(wall.windows ?? []), { offset: windowOffset, width, height: wallHeight / 2, sillHeight: wallHeight / 4 }] });
             }}
           >
             <PlusIcon data-icon="inline-start" />Add
@@ -625,16 +634,15 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
               <div key={windowIndex} className="space-y-3">
                 <p className="text-sm font-medium">Window {windowIndex + 1}</p>
                 <div className="grid grid-cols-2 gap-3">
-                  {(["offset", "width"] as const).map((key) => (
+                  {(["offset", "width", "height", "sillHeight"] as const).map((key) => (
                     <Field key={key}>
                       <FieldLabel htmlFor={`window-${selectedIndex}-${windowIndex}-${key}`}>
-                        {key === "offset" ? "Offset (px)" : "Width (px)"}
+                        {{ offset: "Offset (px)", width: "Width (px)", height: "Height (px)", sillHeight: "Above floor (px)" }[key]}
                       </FieldLabel>
                       <Input
                         id={`window-${selectedIndex}-${windowIndex}-${key}`}
                         type="number"
-                        min={key === "offset" ? 0 : 1}
-                        max={Math.max(0, wallLength - (key === "offset" ? window.width : window.offset))}
+                        min={key === "offset" || key === "sillHeight" ? 0 : 1}
                         step="1"
                         value={window[key]}
                         onChange={(event) => updateWindow(windowIndex, key, event.target.value)}
@@ -654,8 +662,8 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
             <FieldLabel>Doors</FieldLabel>
             <FieldDescription>{wall.doors?.length ?? 0} doors · drag on the map</FieldDescription>
           </div>
-          <Button variant="outline" size="xs" disabled={doorOffset + 64 > wallLength} onClick={() => {
-            onUpdateWall(selectedIndex, { doors: [...(wall.doors ?? []), { id: crypto.randomUUID(), type: "hinged", offset: doorOffset, width: 64 }] });
+          <Button variant="outline" size="xs" disabled={wallHeight <= 0 || doorOffset + 64 > wallLength} onClick={() => {
+            onUpdateWall(selectedIndex, { doors: [...(wall.doors ?? []), { id: crypto.randomUUID(), type: "hinged", offset: doorOffset, width: 64, height: doorHeight }] });
           }}><PlusIcon data-icon="inline-start" />Add door</Button>
         </div>
         {doorOffset + 64 > wallLength && <FieldDescription>Make room for a 64 px doorway to add a door.</FieldDescription>}
@@ -673,9 +681,9 @@ function WallInspector({ config, selectedIndex, onUpdateWall }: {
               </Select>
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              {(["offset", "width"] as const).map((key) => (
+              {(["offset", "width", "height"] as const).map((key) => (
                 <Field key={key}>
-                  <FieldLabel htmlFor={`door-${index}-${key}`}>{key === "offset" ? "Offset (px)" : "Width (px)"}</FieldLabel>
+                  <FieldLabel htmlFor={`door-${index}-${key}`}>{{ offset: "Offset (px)", width: "Width (px)", height: "Height (px)", sillHeight: "Above floor (px)" }[key]}</FieldLabel>
                   <Input id={`door-${index}-${key}`} type="number" min={key === "offset" ? 0 : 1} step="1" value={door[key]} onChange={(event) => {
                     if (event.target.value !== "") updateDoor(index, { [key]: Number(event.target.value) });
                   }} />
@@ -846,7 +854,7 @@ function PresetForm({ name, preset, names, usage, textures, onSave, onDelete }: 
           ["edgeWidth", "Outline width", 2, 16, 1],
           ["windowInset", "Window inset", 0.6, 1, 0.01],
           ["windowAlpha", "Glass opacity", 0.5, 1, 0.01],
-          ["sillHeight", "Sill height", "Wall thickness", 64, 1],
+          ["sillThickness", "Sill thickness", "Wall thickness", 64, 1],
         ] as const).map(([key, label, fallback, max, step]) => (
           <Field key={key}>
             <FieldLabel htmlFor={`preset-${key}`}>{label}</FieldLabel>
